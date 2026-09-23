@@ -4,7 +4,7 @@ import { defineStore } from 'pinia'
 import { switchStore as switchStoreRequest } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePermissionStore } from '@/stores/permission'
-import type { CurrentUserVo } from '@/types/auth'
+import type { CurrentUserVo, OrgScopeTreeNode, StoreBrief } from '@/types/auth'
 import { setToken } from '@/utils/token'
 
 /** 切店成功后通知后续业务清缓存。本阶段没有业务缓存可清。 */
@@ -14,10 +14,13 @@ export interface StoreContextSnapshot {
   currentStoreId: number | null
   currentStoreName: string | null
   availableStoreIds: number[]
+  availableStores: StoreBrief[]
+  orgScopeTree: OrgScopeTreeNode[]
 }
 
 /**
- * 当前门店只认 /me 的 storeId，不默认取 storeIds[0]，也不给其他门店编造名称。
+ * 当前门店只认 /me 的 storeId。
+ * 展示优先 orgScopeTree / stores 名称，storeIds 仅作兼容与切店校验。
  */
 export function resolveStoreContext(user: CurrentUserVo | null): StoreContextSnapshot {
   if (user == null) {
@@ -25,12 +28,33 @@ export function resolveStoreContext(user: CurrentUserVo | null): StoreContextSna
       currentStoreId: null,
       currentStoreName: null,
       availableStoreIds: [],
+      availableStores: [],
+      orgScopeTree: [],
     }
   }
+
+  const availableStores =
+    user.stores != null && user.stores.length > 0
+      ? user.stores.map((item) => ({ id: item.id, name: item.name }))
+      : (user.storeIds ?? []).map((id) => ({
+          id,
+          name:
+            id === user.storeId && user.storeName != null && user.storeName !== ''
+              ? user.storeName
+              : String(id),
+        }))
+
+  const availableStoreIds =
+    user.storeIds != null && user.storeIds.length > 0
+      ? [...user.storeIds]
+      : availableStores.map((item) => item.id)
+
   return {
     currentStoreId: user.storeId ?? null,
     currentStoreName: user.storeName ?? null,
-    availableStoreIds: [...(user.storeIds ?? [])],
+    availableStoreIds,
+    availableStores,
+    orgScopeTree: [...(user.orgScopeTree ?? [])],
   }
 }
 
@@ -52,6 +76,8 @@ export const useStoreStore = defineStore('storeContext', () => {
   const currentStoreId = ref<number | null>(null)
   const currentStoreName = ref<string | null>(null)
   const availableStoreIds = ref<number[]>([])
+  const availableStores = ref<StoreBrief[]>([])
+  const orgScopeTree = ref<OrgScopeTreeNode[]>([])
   const initialized = ref(false)
   const switching = ref(false)
 
@@ -60,6 +86,8 @@ export const useStoreStore = defineStore('storeContext', () => {
     currentStoreId.value = next.currentStoreId
     currentStoreName.value = next.currentStoreName
     availableStoreIds.value = next.availableStoreIds
+    availableStores.value = next.availableStores
+    orgScopeTree.value = next.orgScopeTree
   }
 
   watch(
@@ -127,6 +155,8 @@ export const useStoreStore = defineStore('storeContext', () => {
     currentStoreId,
     currentStoreName,
     availableStoreIds,
+    availableStores,
+    orgScopeTree,
     initialized,
     switching,
     initialize,

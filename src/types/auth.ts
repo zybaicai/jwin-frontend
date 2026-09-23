@@ -7,6 +7,25 @@ export interface StoreBrief {
   name: string
 }
 
+/** 对齐 EmployeeRoleAccessVo.OrgEntityBriefVo */
+export interface OrgEntityBrief {
+  id: number
+  name: string
+  store: boolean
+  parentId: number | null
+}
+
+/** 对齐 OrgScopeTreeNodeVo：可访问组织层级树节点 */
+export interface OrgScopeTreeNode {
+  id: number
+  name: string
+  parentId: number | null
+  /** true=门店，可调用 switch-store */
+  store: boolean
+  sequence: number | null
+  children: OrgScopeTreeNode[]
+}
+
 export interface LoginRequest {
   username: string
   password: string
@@ -42,9 +61,15 @@ export interface CurrentUserVo {
   jobName: string | null
   jobTypeIds: number[]
   orgEntityIds: number[]
+  orgEntities: OrgEntityBrief[]
+  /** 可访问组织层级树；store=true 的节点可切店 */
+  orgScopeTree: OrgScopeTreeNode[]
   storeId: number | null
   storeName: string | null
+  /** 可访问门店 ID（兼容旧前端） */
   storeIds: number[]
+  /** 可访问门店摘要（id + name） */
+  stores: StoreBrief[]
   roles: RoleBrief[]
   permissionCodes: string[]
   dataScope: string | null

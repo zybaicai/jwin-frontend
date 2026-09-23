@@ -225,6 +225,9 @@ customer:list:view / customer:create / customer:edit
 | --------------- | -------- | ---------------- |
 | permissionCodes | string[] | 职务∪系统角色合并后的功能权限码 |
 | dataScope       | string   | 数据范围枚举名          |
+| orgEntities     | array    | 勾选组织范围节点（含名称）    |
+| orgScopeTree    | array    | 可访问组织层级树（含名称）    |
+| stores          | array    | 可访问门店 id+name    |
 
 
 ---
@@ -384,19 +387,41 @@ Authorization: Bearer {token}
     "employeeName": "测试员工",
     "jobId": 1,
     "jobName": "店长",
-    "storeId": 1001,
-    "storeName": "杭州A店",
-    "storeIds": [
-      1001
+    "jobTypeIds": [1],
+    "orgEntityIds": [200],
+    "orgEntities": [
+      { "id": 200, "name": "杭州一部", "store": false, "parentId": 10 }
     ],
-    "roles": [
+    "orgScopeTree": [
       {
-        "id": 1,
-        "name": "管理员"
+        "id": 200,
+        "name": "杭州一部",
+        "parentId": 10,
+        "store": false,
+        "sequence": 1,
+        "children": [
+          {
+            "id": 1001,
+            "name": "杭州A店",
+            "parentId": 200,
+            "store": true,
+            "sequence": 1,
+            "children": []
+          }
+        ]
       }
     ],
+    "storeId": 1001,
+    "storeName": "杭州A店",
+    "storeIds": [1001],
+    "stores": [
+      { "id": 1001, "name": "杭州A店" }
+    ],
+    "roles": [
+      { "id": 1, "name": "管理员" }
+    ],
     "permissionCodes": [],
-    "dataScope": "STORE"
+    "dataScope": "SPECIFIED_STORE"
   },
   "requestId": "00ff2345f7f942fc960dffb0a562db68"
 }
@@ -411,9 +436,12 @@ Authorization: Bearer {token}
 | jobName         | string   | 职务名称                                            |
 | jobTypeIds      | int[]    | 已分配职务角色（可多选；功能权限并集）                             |
 | orgEntityIds    | int[]    | 组织数据范围节点（配置值，未展开）                               |
+| orgEntities     | array    | 勾选范围节点摘要；元素含 `id`、`name`、`store`、`parentId`     |
+| orgScopeTree    | array    | **可访问组织层级树**（勾选展开后的森林）；节点含 `id`/`name`/`parentId`/`store`/`sequence`/`children`；`store=true` 可切店 |
 | storeId         | int      | 当前业务门店 ID（登录/切店后写入 Token）                       |
 | storeName       | string   | 当前门店名称                                          |
-| storeIds        | int[]    | 可访问门店（组织范围展开，或回退员工门店归属）                         |
+| storeIds        | int[]    | 可访问门店 ID（兼容旧前端）                                 |
+| stores          | array    | 可访问门店摘要；元素含 `id`、`name`（切店下拉优先用此或 `orgScopeTree`） |
 | roles           | array    | 职务角色列表；元素含 `id`、`name`（同 jobTypeIds）            |
 | permissionCodes | string[] | 功能权限码（职务∪系统角色合并；未配置绑定时可为空）                      |
 | dataScope       | string   | 已配组织范围时为 `SPECIFIED_STORE`；否则多为 `STORE` / `ALL` |
@@ -422,7 +450,9 @@ Authorization: Bearer {token}
 说明：
 
 - 未带或 Token 无效时返回 `code=10001`，`message=未登录`。
-- 门店范围以 `storeIds` 为准；功能权限以 `permissionCodes` 为准（`@RequirePermission`）。
+- 前端门店/组织选择展示用 `orgScopeTree`（层级 + 名称）或 `stores`（扁平 id+name）；不要只展示 `storeIds` 编号。
+- 切店仍调用 `POST /api/v1/auth/switch-store`，且仅允许 `store=true` 的节点（与 `storeIds`/`stores` 一致）。
+- 功能权限以 `permissionCodes` 为准（`@RequirePermission`）。
 - 组织范围通过 `PUT /api/v1/employees/{id}/role-access` 与职务角色一并配置。
 
 ---

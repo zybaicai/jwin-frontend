@@ -40,11 +40,17 @@ function titleOf(route: RouteLocationNormalized): string {
   return UNTITLED_PAGE
 }
 
+/**
+ * 工作区页签：仅左侧菜单叶子（meta.workspaceTab=true）才开窗。
+ * 新建/查看/编辑等业务弹层不入页签。
+ */
 function toTab(route: RouteLocationNormalized): AppTab {
   const home = isHomeRoute(route)
+  // 用 path 作 key，避免同菜单带 query 时重复开窗
+  const key = home ? HOME_PATH : route.path
   return {
-    key: route.fullPath,
-    path: route.fullPath,
+    key,
+    path: key,
     title: home ? HOME_TITLE : titleOf(route),
     closable: home ? false : route.meta.tabClosable !== false,
     keepAlive: route.meta.keepAlive === true,
@@ -52,7 +58,7 @@ function toTab(route: RouteLocationNormalized): AppTab {
 }
 
 /**
- * 工作区标签。只记录已打开页面，不负责跳转，也不写入 localStorage。
+ * 工作区标签。只记录菜单级页面，不负责跳转，也不写入 localStorage。
  */
 export const useTabsStore = defineStore('tabs', () => {
   const tabs = ref<AppTab[]>([createHomeTab()])
@@ -95,6 +101,10 @@ export const useTabsStore = defineStore('tabs', () => {
 
   function syncFromRoute(route: RouteLocationNormalized): void {
     if (typeof route.name === 'string' && EXCLUDED_ROUTE_NAMES.has(route.name)) {
+      return
+    }
+    // 非菜单叶子不入页签（查看/编辑/建档等应走弹窗）
+    if (route.meta.workspaceTab !== true) {
       return
     }
     ensureHomeTab()

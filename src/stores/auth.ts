@@ -2,7 +2,13 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { getCurrentUser, login as loginRequest, logout as logoutRequest } from '@/api/auth'
-import type { CurrentUserVo, LoginRequest } from '@/types/auth'
+import type {
+  CurrentUserVo,
+  LoginRequest,
+  OrgEntityBrief,
+  OrgScopeTreeNode,
+  StoreBrief,
+} from '@/types/auth'
 import type { EmployeeInfo } from '@/types/user'
 import { ApiCode } from '@/types/response'
 import { ApiBusinessError } from '@/utils/api-error'
@@ -10,7 +16,48 @@ import { getToken, removeToken, setToken } from '@/utils/token'
 
 export type AuthInitStatus = 'idle' | 'initializing' | 'success' | 'failed'
 
+function normalizeOrgEntities(raw: OrgEntityBrief[] | undefined): OrgEntityBrief[] {
+  if (raw == null) {
+    return []
+  }
+  return raw.map((item) => ({
+    id: item.id,
+    name: item.name ?? String(item.id),
+    store: Boolean(item.store),
+    parentId: item.parentId ?? null,
+  }))
+}
+
+function normalizeOrgScopeTree(raw: OrgScopeTreeNode[] | undefined): OrgScopeTreeNode[] {
+  if (raw == null) {
+    return []
+  }
+  return raw.map((node) => ({
+    id: node.id,
+    name: node.name ?? String(node.id),
+    parentId: node.parentId ?? null,
+    store: Boolean(node.store),
+    sequence: node.sequence ?? null,
+    children: normalizeOrgScopeTree(node.children),
+  }))
+}
+
+function normalizeStores(raw: StoreBrief[] | undefined): StoreBrief[] {
+  if (raw == null) {
+    return []
+  }
+  return raw.map((item) => ({
+    id: item.id,
+    name: item.name ?? String(item.id),
+  }))
+}
+
 function normalizeCurrentUser(raw: CurrentUserVo): CurrentUserVo {
+  const stores = normalizeStores(raw.stores)
+  const storeIds =
+    raw.storeIds != null && raw.storeIds.length > 0
+      ? [...raw.storeIds]
+      : stores.map((item) => item.id)
   return {
     employeeId: raw.employeeId,
     employeeName: raw.employeeName,
@@ -18,9 +65,12 @@ function normalizeCurrentUser(raw: CurrentUserVo): CurrentUserVo {
     jobName: raw.jobName ?? null,
     jobTypeIds: raw.jobTypeIds ?? [],
     orgEntityIds: raw.orgEntityIds ?? [],
+    orgEntities: normalizeOrgEntities(raw.orgEntities),
+    orgScopeTree: normalizeOrgScopeTree(raw.orgScopeTree),
     storeId: raw.storeId ?? null,
     storeName: raw.storeName ?? null,
-    storeIds: raw.storeIds ?? [],
+    storeIds,
+    stores,
     roles: raw.roles ?? [],
     permissionCodes: raw.permissionCodes ?? [],
     dataScope: raw.dataScope ?? null,
