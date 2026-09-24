@@ -145,6 +145,36 @@ export interface CustomerSaleQuery {
   size?: number
 }
 
+/** 对齐 CustomerSaleItemVo —— 顾客销售明细（一行一个销售项目） */
+export interface CustomerSaleItem {
+  billId: string
+  billStatus: string | null
+  storeId: number | null
+  storeName: string | null
+  employeeId: string | null
+  employeeName: string | null
+  itemType: string | null
+  itemTypeName: string | null
+  categoryName: string | null
+  itemName: string | null
+  price: number | string | null
+  quantity: number | null
+  gift: boolean | null
+  totalAmount: number | string | null
+  giftAmount: number | string | null
+  arrearAmount: number | string | null
+  payAmount: number | string | null
+  billDate: string | null
+}
+
+/** 对齐 CustomerSaleQuery（销售明细与销售订单共用查询参数） */
+export interface CustomerSaleItemQuery {
+  employeeId?: string
+  employeeName?: string
+  page?: number
+  size?: number
+}
+
 /** 对齐 CustomerPaymentVo —— 顾客支付流水（一行一笔支付） */
 export interface CustomerPaymentItem {
   billId: string
@@ -188,6 +218,151 @@ export interface CustomerTreatOrderQuery {
   billStatus?: string
   employeeId?: string
   employeeName?: string
+  page?: number
+  size?: number
+}
+
+/** 对齐 CustomerTreatItemVo —— 顾客消耗明细（一行一个消耗项目） */
+export interface CustomerTreatItem {
+  billId: string
+  billStatus: string | null
+  billStatusName: string | null
+  billType: string | null
+  storeId: number | null
+  storeName: string | null
+  itemType: string | null
+  itemTypeName: string | null
+  cardName: string | null
+  categoryName: string | null
+  itemName: string | null
+  price: number | string | null
+  quantity: number | null
+  gift: boolean | null
+  totalAmount: number | string | null
+  payAmount: number | string | null
+  cardDeductionAmount: number | string | null
+  largessCardDeductionAmount: number | string | null
+  billDate: string | null
+}
+
+export interface CustomerTreatItemQuery {
+  keyword?: string
+  billStatus?: string
+  employeeId?: string
+  employeeName?: string
+  page?: number
+  size?: number
+}
+
+/** 对齐 CustomerTransferVo —— 顾客卡项转账记录（一行一单） */
+export interface CustomerTransferItem {
+  id: string
+  outCustomerId: number | null
+  outCustomerName: string | null
+  inCustomerId: number | null
+  inCustomerName: string | null
+  storeId: number | null
+  storeName: string | null
+  employeeId: string | null
+  employeeName: string | null
+  billStatus: string | null
+  createdOn: string | null
+}
+
+export interface CustomerTransferQuery {
+  keyword?: string
+  employeeId?: string
+  employeeName?: string
+  createdOnFrom?: string
+  createdOnTo?: string
+  page?: number
+  size?: number
+}
+
+/** 对齐 CustomerExtensionVo —— 延期单下的一个卡项账户延期明细 */
+export interface CustomerExtensionItem {
+  billId: string
+  customerId: number | null
+  customerName: string | null
+  storeId: number | null
+  storeName: string | null
+  employeeId: string | null
+  employeeName: string | null
+  approvalStatus: string | null
+  approvalStatusName: string | null
+  itemType: string | null
+  itemTypeName: string | null
+  accountId: number | null
+  cardName: string | null
+  oldValidDate: string | null
+  newValidDate: string | null
+  extensionDays: number | null
+  everlasting: boolean | null
+  remark: string | null
+  channel: string | null
+  createdOn: string | null
+}
+
+/** 对齐 CustomerExtensionQuery */
+export interface CustomerExtensionQuery {
+  keyword?: string
+  employeeId?: string
+  employeeName?: string
+  createdOnFrom?: string
+  createdOnTo?: string
+  page?: number
+  size?: number
+}
+
+/** 对齐 CustomerFollowUpVo —— 顾客跟进记录 */
+export interface CustomerFollowUpItem {
+  id: number
+  customerId: number | null
+  followUpMethodId: number | null
+  followUpMethodName: string | null
+  followUpStatusId: number | null
+  followUpStatusName: string | null
+  followUpContent: string | null
+  isFollowUp: boolean | null
+  plannedOn: string | null
+  plannedRemark: string | null
+  followUpOn: string | null
+  followUpBy: string | null
+  followUpByName: string | null
+  createdBy: string | null
+  createdByName: string | null
+  createdOn: string | null
+}
+
+/** 对齐 CustomerFollowUpQuery */
+export interface CustomerFollowUpQuery {
+  keyword?: string
+  followUpStatusId?: number
+  followUpMethodId?: number
+  followUpBy?: string
+  plannedOnFrom?: string
+  plannedOnTo?: string
+  followUpOnFrom?: string
+  followUpOnTo?: string
+  page?: number
+  size?: number
+}
+
+/** 对齐 CustomerServiceLogVo —— 顾客服务（护理）日志 */
+export interface CustomerServiceLogItem {
+  id: number
+  nurseEmployeeId: string | null
+  nurseName: string | null
+  content: string | null
+  createdOn: string | null
+  storeId: number | null
+  storeName: string | null
+}
+
+/** 对齐 CustomerServiceLogQuery */
+export interface CustomerServiceLogQuery {
+  createdOnFrom?: string
+  createdOnTo?: string
   page?: number
   size?: number
 }
@@ -238,6 +413,7 @@ export interface UpdateCustomerBody {
   nurseEmployeeId?: string | null
 }
 
+/** 对齐 CustomerSourceVo */
 export interface CustomerSourceOption {
   id: number
   name: string
@@ -245,6 +421,9 @@ export interface CustomerSourceOption {
   sequence: number | null
   active: boolean | null
 }
+
+/** 来源管理页复用同一 VO */
+export type CustomerSource = CustomerSourceOption
 
 export interface ServicerEmployeeOption {
   id: string
@@ -267,6 +446,7 @@ export const CustomerPermission = {
   CREATE: 'customer:create',
   EDIT: 'customer:edit',
   SOURCE_VIEW: 'customer:source:view',
+  SOURCE_EDIT: 'customer:source:edit',
   TAG_VIEW: 'customer:tag:view',
   TAG_EDIT: 'customer:tag:edit',
 } as const

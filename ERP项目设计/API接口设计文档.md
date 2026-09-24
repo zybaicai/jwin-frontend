@@ -1585,8 +1585,8 @@ GET /api/v1/customers/export
 说明：
 
 ```Plain Text
-响应为 CSV 文件（UTF-8 BOM），Content-Type: text/csv;charset=UTF-8
-Content-Disposition: attachment; filename*=UTF-8''customers-yyyyMMdd.csv
+响应为 XLSX 文件，Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename*=UTF-8''customers-yyyyMMdd.xlsx
 最多导出 10000 条；手机号打码规则同列表
 表头：客户姓名,客户编号,所属门店,手机号码,性别,生日,主护理师,信息来源,介绍人,会员等级,成为会员日期,上次消耗日期
 ```

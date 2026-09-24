@@ -24,6 +24,28 @@ export function pickMainNurseEmployees(roles: ServicerOption[]): ServicerEmploye
   return result
 }
 
+/**
+ * 护理师筛选：角色名含「护理」或「顾问」，对齐后端 caregiverEmployeeId SQL。
+ */
+export function pickCaregiverEmployees(roles: ServicerOption[]): ServicerEmployeeOption[] {
+  const result: ServicerEmployeeOption[] = []
+  const seen = new Set<string>()
+  for (const role of roles) {
+    const name = role.name?.trim() ?? ''
+    if (!name.includes('护理') && !name.includes('顾问')) {
+      continue
+    }
+    for (const emp of role.servicerEmpList ?? []) {
+      if (!emp.id || seen.has(emp.id)) {
+        continue
+      }
+      seen.add(emp.id)
+      result.push(emp)
+    }
+  }
+  return result
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (value == null || value === '') {
     return '—'
@@ -73,6 +95,24 @@ export function formatMemberStatus(member: boolean | null | undefined): string {
     return '非会员'
   }
   return '—'
+}
+
+/** 客户选择器选项文案：姓名 + 手机号（同名时区分） */
+export function formatCustomerPickerLabel(item: {
+  name?: string | null
+  mobile?: string | null
+  code?: string | null
+}): string {
+  const name = item.name?.trim() || '未命名'
+  const mobile = item.mobile?.trim()
+  if (mobile) {
+    return `${name}（${mobile}）`
+  }
+  const code = item.code?.trim()
+  if (code) {
+    return `${name}（${code}）`
+  }
+  return name
 }
 
 /** 次数/数量类余量展示 */

@@ -5,6 +5,8 @@ export interface AppMenuItem {
   name: string
   title: string
   icon: Component
+  /** 有值时仅在拥有该权限时显示菜单项 */
+  permission?: string
 }
 
 function menuIcon(name: string, markup: () => VNode[]): Component {
@@ -47,8 +49,16 @@ const IconCustomers = menuIcon('IconCustomers', () => [
   h('path', { d: 'M16 19 C16 16.5 17.5 15.5 20 15.5' }),
 ])
 
+const IconSales = menuIcon('IconSales', () => [
+  h('path', { d: 'M4 7 H20' }),
+  h('path', { d: 'M4 12 H20' }),
+  h('path', { d: 'M4 17 H14' }),
+  h('circle', { cx: '18', cy: '17', r: '2' }),
+])
+
 /**
- * 静态菜单。不按权限过滤，也不指向未注册的路由。
+ * 静态菜单。不指向未注册的路由。
+ * 带 permission 的项由 Sidebar 按权限过滤。
  */
 export const appMenu: AppMenuItem[] = [
   {
@@ -62,6 +72,27 @@ export const appMenu: AppMenuItem[] = [
     name: 'customer-list',
     title: '客户管理',
     icon: IconCustomers,
+  },
+  {
+    path: '/customers/tags',
+    name: 'customer-tags',
+    title: '客户标签管理',
+    icon: IconCustomers,
+    permission: 'customer:tag:view',
+  },
+  {
+    path: '/customers/sources',
+    name: 'customer-sources',
+    title: '客户来源管理',
+    icon: IconCustomers,
+    permission: 'customer:source:view',
+  },
+  {
+    path: '/sales/cashier',
+    name: 'sales-cashier',
+    title: '销售开单',
+    icon: IconSales,
+    permission: 'sale:order:create',
   },
   {
     path: '/menu-placeholder',

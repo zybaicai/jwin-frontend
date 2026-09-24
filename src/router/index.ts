@@ -7,6 +7,9 @@ import AuthInitErrorView from '@/views/AuthInitErrorView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import CustomerListView from '@/views/customer/CustomerListView.vue'
+import CustomerSourceManageView from '@/views/customer/CustomerSourceManageView.vue'
+import CustomerTagManageView from '@/views/customer/CustomerTagManageView.vue'
+import SalesCashierView from '@/views/sale/SalesCashierView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -62,6 +65,45 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             title: '客户管理',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'customers/tags',
+          name: 'customer-tags',
+          component: CustomerTagManageView,
+          meta: {
+            requiresAuth: true,
+            title: '客户标签管理',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'customers/sources',
+          name: 'customer-sources',
+          component: CustomerSourceManageView,
+          meta: {
+            requiresAuth: true,
+            title: '客户来源管理',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'sales/cashier',
+          name: 'sales-cashier',
+          component: SalesCashierView,
+          meta: {
+            requiresAuth: true,
+            title: '销售开单',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,

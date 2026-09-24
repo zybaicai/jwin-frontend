@@ -27,7 +27,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
     if (error.code === ApiCode.UNAUTHORIZED) {
       return FALLBACK_MESSAGE
     }
-    return FALLBACK_MESSAGE
+    return error.message || FALLBACK_MESSAGE
   }
   if (error instanceof ApiHttpError) {
     if (error.message === '请求超时') {

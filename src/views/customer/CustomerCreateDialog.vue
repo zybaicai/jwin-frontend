@@ -4,12 +4,16 @@ import { reactive, ref, watch } from 'vue'
 import AppError from '@/components/common/AppError.vue'
 import {
   createCustomer,
+  fetchCustomerPage,
   fetchCustomerSourceOptions,
   fetchServicerOptions,
 } from '@/api/customer'
-import type { CustomerSourceOption } from '@/types/customer'
-import { notifyError, runExclusive, uiMessage } from '@/utils/ui'
-import { pickMainNurseEmployees } from '@/views/customer/customer-format'
+import type { CustomerListItem, CustomerSourceOption } from '@/types/customer'
+import { getUserFriendlyErrorMessage, notifyError, runExclusive, uiMessage } from '@/utils/ui'
+import {
+  formatCustomerPickerLabel,
+  pickMainNurseEmployees,
+} from '@/views/customer/customer-format'
 
 const visible = defineModel<boolean>({ default: false })
 
@@ -23,6 +27,12 @@ const optionsError = ref<string | null>(null)
 const sourceOptions = ref<CustomerSourceOption[]>([])
 const nurseOptions = ref<{ id: string; name: string }[]>([])
 
+const introducerOptions = ref<CustomerListItem[]>([])
+const introducerSearching = ref(false)
+const introducerSearchError = ref<string | null>(null)
+let introducerSearchTimer: ReturnType<typeof setTimeout> | null = null
+let introducerSearchSeq = 0
+
 const form = reactive({
   name: '',
   mobile: '',
@@ -32,6 +42,7 @@ const form = reactive({
   remark: '',
   address: '',
   nurseEmployeeId: '' as string,
+  introducerCustomerId: undefined as number | undefined,
 })
 
 function resetForm(): void {
@@ -43,7 +54,14 @@ function resetForm(): void {
   form.remark = ''
   form.address = ''
   form.nurseEmployeeId = ''
+  form.introducerCustomerId = undefined
+  introducerOptions.value = []
+  introducerSearchError.value = null
   optionsError.value = null
+  if (introducerSearchTimer != null) {
+    clearTimeout(introducerSearchTimer)
+    introducerSearchTimer = null
+  }
 }
 
 async function loadOptions(): Promise<void> {
@@ -60,10 +78,54 @@ async function loadOptions(): Promise<void> {
       name: emp.name?.trim() || emp.id,
     }))
   } catch (error) {
-    optionsError.value = '选项加载失败'
+    optionsError.value = getUserFriendlyErrorMessage(error)
     notifyError(error)
   } finally {
     loadingOptions.value = false
+  }
+}
+
+function searchIntroducers(keyword: string): void {
+  if (introducerSearchTimer != null) {
+    clearTimeout(introducerSearchTimer)
+  }
+  const trimmed = keyword.trim()
+  if (trimmed === '') {
+    introducerOptions.value = []
+    introducerSearchError.value = null
+    introducerSearching.value = false
+    return
+  }
+  introducerSearchTimer = setTimeout(() => {
+    void runIntroducerSearch(trimmed)
+  }, 300)
+}
+
+async function runIntroducerSearch(keyword: string): Promise<void> {
+  const seq = ++introducerSearchSeq
+  introducerSearching.value = true
+  introducerSearchError.value = null
+  try {
+    const data = await fetchCustomerPage({
+      keyword,
+      page: 1,
+      size: 20,
+    })
+    if (seq !== introducerSearchSeq) {
+      return
+    }
+    introducerOptions.value = data.records ?? []
+  } catch (error) {
+    if (seq !== introducerSearchSeq) {
+      return
+    }
+    introducerOptions.value = []
+    introducerSearchError.value = '介绍人搜索失败'
+    notifyError(error)
+  } finally {
+    if (seq === introducerSearchSeq) {
+      introducerSearching.value = false
+    }
   }
 }
 
@@ -83,6 +145,7 @@ async function handleSubmit(): Promise<void> {
         remark: form.remark.trim() || null,
         address: form.address.trim() || null,
         nurseEmployeeId: form.nurseEmployeeId || null,
+        introducerCustomerId: form.introducerCustomerId ?? null,
       })
       uiMessage.success('保存成功')
       visible.value = false
@@ -150,6 +213,33 @@ watch(visible, (open) => {
           />
         </el-select>
       </el-form-item>
+      <el-form-item label="介绍人">
+        <el-select
+          v-model="form.introducerCustomerId"
+          filterable
+          remote
+          clearable
+          reserve-keyword
+          :remote-method="searchIntroducers"
+          :loading="introducerSearching"
+          placeholder="输入姓名/编号/手机号搜索"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="item in introducerOptions"
+            :key="item.id"
+            :label="formatCustomerPickerLabel(item)"
+            :value="item.id"
+          />
+        </el-select>
+        <p v-if="introducerSearchError" class="field-hint is-error">{{ introducerSearchError }}</p>
+        <p
+          v-else-if="!introducerSearching && introducerOptions.length === 0"
+          class="field-hint"
+        >
+          输入关键字搜索本店可见客户
+        </p>
+      </el-form-item>
       <el-form-item label="主护理师">
         <el-select
           v-model="form.nurseEmployeeId"
@@ -195,3 +285,16 @@ watch(visible, (open) => {
     </template>
   </el-dialog>
 </template>
+
+<style scoped>
+.field-hint {
+  margin: 6px 0 0;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.field-hint.is-error {
+  color: #f56c6c;
+}
+</style>

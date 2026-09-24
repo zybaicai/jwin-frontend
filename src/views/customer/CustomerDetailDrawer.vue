@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -9,22 +10,38 @@ import {
   fetchAllCustomerTags,
   fetchCustomerDetail,
   fetchCustomerTags,
+  findCustomerListItemById,
 } from '@/api/customer'
 import {
   CustomerPermission,
   type CustomerDetail,
   type CustomerDetailTabKey,
+  type CustomerListItem,
   type CustomerTagItem,
 } from '@/types/customer'
-import { getUserFriendlyErrorMessage, notifyError, runExclusive, uiMessage } from '@/utils/ui'
+import { usePermissionStore } from '@/stores/permission'
+import {
+  getUserFriendlyErrorMessage,
+  notifyError,
+  runExclusive,
+  uiConfirm,
+  uiMessage,
+} from '@/utils/ui'
 import {
   formatDate,
   formatDateTime,
+  formatGender,
   formatMemberStatus,
   formatMoney,
 } from '@/views/customer/customer-format'
+import { AppointmentPermission } from '@/types/appointment'
+import { SalePermission } from '@/types/sale'
+import CustomerAppointment from '@/views/customer/CustomerAppointment.vue'
+import CustomerAppointmentCreateDialog from '@/views/customer/CustomerAppointmentCreateDialog.vue'
 import CustomerCardInfo from '@/views/customer/CustomerCardInfo.vue'
+import CustomerFollowUp from '@/views/customer/CustomerFollowUp.vue'
 import CustomerOrderInfo from '@/views/customer/CustomerOrderInfo.vue'
+import CustomerServiceLog from '@/views/customer/CustomerServiceLog.vue'
 
 defineOptions({ name: 'CustomerDetailDrawer' })
 
@@ -38,14 +55,25 @@ const emit = defineEmits<{
   edit: [customerId: number]
 }>()
 
+const router = useRouter()
+const permissionStore = usePermissionStore()
+const canEditCustomer = computed(() =>
+  permissionStore.hasPermission(CustomerPermission.EDIT),
+)
+
 const activeTab = ref<CustomerDetailTabKey>('profile')
 const profileCollapsed = ref(false)
 const cardInfoRef = ref<{ reloadCurrent: () => Promise<void> } | null>(null)
 const orderInfoRef = ref<{ reloadCurrent: () => Promise<void> } | null>(null)
+const followUpRef = ref<{ reloadCurrent: () => Promise<void> } | null>(null)
+const appointmentRef = ref<{ reloadCurrent: () => Promise<void> } | null>(null)
+const serviceLogRef = ref<{ reloadCurrent: () => Promise<void> } | null>(null)
 
 const loading = ref(false)
 const loadError = ref<string | null>(null)
 const detail = ref<CustomerDetail | null>(null)
+/** CustomerDetailVo 不含介绍人/地址/备注，用列表 CustomerVo 补齐展示 */
+const profileExtra = ref<CustomerListItem | null>(null)
 
 const tagsLoading = ref(false)
 const tagsError = ref<string | null>(null)
@@ -58,6 +86,7 @@ const tagLibrary = ref<CustomerTagItem[]>([])
 const editingTagIds = ref<number[]>([])
 
 const visitedTabs = ref<Set<CustomerDetailTabKey>>(new Set(['profile']))
+const appointmentCreateVisible = ref(false)
 
 const displayName = computed(() => detail.value?.name?.trim() || '未命名客户')
 const genderSymbol = computed(() => {
@@ -100,7 +129,9 @@ function resetState(): void {
   activeTab.value = 'profile'
   profileCollapsed.value = false
   visitedTabs.value = new Set(['profile'])
+  appointmentCreateVisible.value = false
   detail.value = null
+  profileExtra.value = null
   loadError.value = null
   tags.value = []
   tagsError.value = null
@@ -109,18 +140,31 @@ function resetState(): void {
   editingTagIds.value = []
 }
 
+async function loadProfileExtra(current: CustomerDetail): Promise<void> {
+  try {
+    const keyword = current.code?.trim() || current.mobile?.trim() || current.name?.trim() || ''
+    profileExtra.value = await findCustomerListItemById(current.id, keyword)
+  } catch {
+    profileExtra.value = null
+  }
+}
+
 async function loadBasic(): Promise<void> {
   if (props.customerId == null) {
     loadError.value = '客户 ID 无效'
     detail.value = null
+    profileExtra.value = null
     return
   }
   await runExclusive(loading, async () => {
     loadError.value = null
     try {
-      detail.value = await fetchCustomerDetail(props.customerId!)
+      const next = await fetchCustomerDetail(props.customerId!)
+      detail.value = next
+      await loadProfileExtra(next)
     } catch (error) {
       detail.value = null
+      profileExtra.value = null
       loadError.value = getUserFriendlyErrorMessage(error)
       notifyError(error)
     }
@@ -167,6 +211,18 @@ async function handleRefresh(): Promise<void> {
   }
   if (activeTab.value === 'orders') {
     await orderInfoRef.value?.reloadCurrent()
+    return
+  }
+  if (activeTab.value === 'serviceLogs') {
+    await serviceLogRef.value?.reloadCurrent()
+    return
+  }
+  if (activeTab.value === 'followUps') {
+    await followUpRef.value?.reloadCurrent()
+    return
+  }
+  if (activeTab.value === 'appointments') {
+    await appointmentRef.value?.reloadCurrent()
   }
 }
 
@@ -177,12 +233,42 @@ function handleEdit(): void {
   emit('edit', props.customerId)
 }
 
+function handleOpenAppointmentCreate(): void {
+  if (props.customerId == null) {
+    return
+  }
+  appointmentCreateVisible.value = true
+}
+
+function handleOpenSaleCashier(): void {
+  if (props.customerId == null) {
+    return
+  }
+  visible.value = false
+  void router.push({
+    path: '/sales/cashier',
+    query: { customerId: String(props.customerId) },
+  })
+}
+
+async function handleAppointmentCreated(): Promise<void> {
+  // 仅刷新已访问过的预约记录 Tab，不提前加载、不切换 Tab
+  if (visitedTabs.value.has('appointments')) {
+    await appointmentRef.value?.reloadCurrent()
+  }
+}
+
+const availableTagOptions = computed(() => {
+  const owned = new Set(tags.value.map((item) => item.id))
+  return tagLibrary.value.filter((item) => !owned.has(item.id))
+})
+
 async function openTagEditor(): Promise<void> {
   if (props.customerId == null) {
     return
   }
   tagEditVisible.value = true
-  editingTagIds.value = tags.value.map((item) => item.id)
+  editingTagIds.value = []
   tagEditLoading.value = true
   try {
     tagLibrary.value = await fetchAllCustomerTags()
@@ -199,27 +285,44 @@ async function saveTags(): Promise<void> {
     return
   }
   const customerId = props.customerId
-  const nextIds = new Set(editingTagIds.value)
   const currentIds = new Set(tags.value.map((item) => item.id))
-  const toAttach = [...nextIds].filter((id) => !currentIds.has(id))
-  const toDetach = [...currentIds].filter((id) => !nextIds.has(id))
+  const toAttach = editingTagIds.value.filter((id) => !currentIds.has(id))
+  if (toAttach.length === 0) {
+    uiMessage.warning('请选择要添加的标签')
+    return
+  }
 
   await runExclusive(tagSaving, async () => {
     try {
-      for (const tagId of toDetach) {
-        await detachCustomerTag(customerId, tagId)
-      }
-      if (toAttach.length > 0) {
-        tags.value = await attachCustomerTags(customerId, toAttach)
-      } else if (toDetach.length > 0) {
-        tags.value = await fetchCustomerTags(customerId)
-      }
-      uiMessage.success('标签已更新')
+      await attachCustomerTags(customerId, toAttach)
+      tags.value = await fetchCustomerTags(customerId)
+      uiMessage.success('标签已添加')
       tagEditVisible.value = false
     } catch (error) {
       notifyError(error)
     }
   })
+}
+
+async function handleRemoveCustomerTag(tag: CustomerTagItem): Promise<void> {
+  if (props.customerId == null) {
+    return
+  }
+  const ok = await uiConfirm({
+    title: '移除标签',
+    message: `确认移除该客户标签「${tag.name || tag.id}」？`,
+    confirmText: '移除',
+  })
+  if (!ok) {
+    return
+  }
+  try {
+    await detachCustomerTag(props.customerId, tag.id)
+    tags.value = await fetchCustomerTags(props.customerId)
+    uiMessage.success('已移除客户标签')
+  } catch (error) {
+    notifyError(error)
+  }
 }
 
 function handleClosed(): void {
@@ -296,8 +399,18 @@ defineExpose({
               {{ profileCollapsed ? '展开资料' : '收起资料' }}
               <span class="chevron" :class="{ 'is-collapsed': profileCollapsed }">⌃</span>
             </button>
-            <el-button disabled title="功能建设中">开单</el-button>
-            <el-button disabled title="功能建设中">预约</el-button>
+            <el-button
+              v-permission="SalePermission.ORDER_CREATE"
+              @click="handleOpenSaleCashier"
+            >
+              开单
+            </el-button>
+            <el-button
+              v-permission="AppointmentPermission.EDIT"
+              @click="handleOpenAppointmentCreate"
+            >
+              预约
+            </el-button>
           </div>
         </div>
 
@@ -328,12 +441,20 @@ defineExpose({
               <span class="value">{{ detail.sourceName || '—' }}</span>
             </div>
             <div class="info-cell">
+              <span class="label">介绍人</span>
+              <span class="value">{{ profileExtra?.introducerName || '—' }}</span>
+            </div>
+            <div class="info-cell">
               <span class="label">注册门店</span>
               <span class="value">{{ detail.registerStoreName || '—' }}</span>
             </div>
             <div class="info-cell">
               <span class="label">注册时间</span>
               <span class="value">{{ formatDateTime(detail.createdOn) }}</span>
+            </div>
+            <div class="info-cell">
+              <span class="label">入会时间</span>
+              <span class="value">{{ formatDateTime(detail.memberOn) }}</span>
             </div>
           </div>
 
@@ -384,17 +505,105 @@ defineExpose({
         >
           <el-tab-pane label="基本档案" name="profile" lazy>
             <div v-if="visitedTabs.has('profile')" class="tab-pane-body">
+              <div v-if="detail" class="profile-archive">
+                <section class="archive-section">
+                  <h3 class="archive-title">基础资料</h3>
+                  <div class="archive-grid">
+                    <div class="info-cell">
+                      <span class="label">姓名</span>
+                      <span class="value">{{ detail.name || '—' }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">手机号</span>
+                      <span class="value">{{ detail.mobile || '—' }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">性别</span>
+                      <span class="value">{{ formatGender(detail.gender, detail.genderName) }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">生日</span>
+                      <span class="value">{{ formatDate(detail.birthday) }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">地址</span>
+                      <span class="value">{{ profileExtra?.address || '—' }}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="archive-section">
+                  <h3 class="archive-title">会员资料</h3>
+                  <div class="archive-grid">
+                    <div class="info-cell">
+                      <span class="label">是否会员</span>
+                      <span class="value">{{ formatMemberStatus(detail.member) }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">会员等级</span>
+                      <span class="value">{{ detail.levelName || '—' }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">入会时间</span>
+                      <span class="value">{{ formatDateTime(detail.memberOn) }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">会员编号</span>
+                      <span class="value">{{ detail.code || '—' }}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="archive-section">
+                  <h3 class="archive-title">来源关系</h3>
+                  <div class="archive-grid">
+                    <div class="info-cell">
+                      <span class="label">首来源</span>
+                      <span class="value">{{ detail.sourceName || '—' }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">介绍人</span>
+                      <span class="value">{{ profileExtra?.introducerName || '—' }}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="archive-section">
+                  <h3 class="archive-title">服务关系</h3>
+                  <div class="archive-grid">
+                    <div class="info-cell">
+                      <span class="label">主护理师</span>
+                      <span class="value">{{ detail.nurseName || '—' }}</span>
+                    </div>
+                    <div class="info-cell">
+                      <span class="label">归属门店</span>
+                      <span class="value">{{ detail.storeName || '—' }}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="archive-section">
+                  <h3 class="archive-title">其他</h3>
+                  <div class="archive-grid">
+                    <div class="info-cell archive-cell-wide">
+                      <span class="label">备注</span>
+                      <span class="value is-wrap">{{ profileExtra?.remark || '—' }}</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
               <div class="tags-panel">
                 <div class="tags-header">
-                  <span class="tags-title">标签</span>
+                  <span class="tags-title">客户标签</span>
                   <button
                     v-permission="CustomerPermission.EDIT"
                     type="button"
                     class="text-action"
-                    :disabled="customerId == null"
+                    :disabled="customerId == null || tagsLoading"
                     @click="openTagEditor"
                   >
-                    编辑
+                    + 添加标签
                   </button>
                 </div>
                 <div v-loading="tagsLoading" class="tags-body">
@@ -409,11 +618,17 @@ defineExpose({
                       :key="tag.id"
                       class="tag-chip"
                       effect="plain"
+                      :closable="canEditCustomer"
+                      @close="handleRemoveCustomerTag(tag)"
                     >
                       {{ tag.name }}
                     </el-tag>
                   </template>
-                  <AppEmpty v-else title="暂无标签" description="可点击右上角编辑为顾客贴标。" />
+                  <AppEmpty
+                    v-else
+                    title="暂无标签"
+                    description="可点击「+ 添加标签」为顾客贴标。"
+                  />
                 </div>
               </div>
             </div>
@@ -432,20 +647,20 @@ defineExpose({
           </el-tab-pane>
 
           <el-tab-pane label="服务日志" name="serviceLogs" lazy>
-            <div v-if="visitedTabs.has('serviceLogs')" class="tab-pane-body">
-              <AppEmpty title="功能建设中" description="将调用 /customers/{id}/service-logs。" />
+            <div v-if="visitedTabs.has('serviceLogs') && customerId != null" class="tab-pane-body">
+              <CustomerServiceLog ref="serviceLogRef" :customer-id="customerId" />
             </div>
           </el-tab-pane>
 
           <el-tab-pane label="跟进记录" name="followUps" lazy>
-            <div v-if="visitedTabs.has('followUps')" class="tab-pane-body">
-              <AppEmpty title="功能建设中" description="跟进记录接口就绪后在此接入。" />
+            <div v-if="visitedTabs.has('followUps') && customerId != null" class="tab-pane-body">
+              <CustomerFollowUp ref="followUpRef" :customer-id="customerId" />
             </div>
           </el-tab-pane>
 
           <el-tab-pane label="预约记录" name="appointments" lazy>
-            <div v-if="visitedTabs.has('appointments')" class="tab-pane-body">
-              <AppEmpty title="功能建设中" description="预约记录接口就绪后在此接入。" />
+            <div v-if="visitedTabs.has('appointments') && customerId != null" class="tab-pane-body">
+              <CustomerAppointment ref="appointmentRef" :customer-id="customerId" />
             </div>
           </el-tab-pane>
 
@@ -468,7 +683,7 @@ defineExpose({
 
     <el-dialog
       v-model="tagEditVisible"
-      title="编辑标签"
+      title="添加标签"
       width="480px"
       append-to-body
       destroy-on-close
@@ -481,21 +696,31 @@ defineExpose({
         filterable
         collapse-tags
         collapse-tags-tooltip
-        placeholder="选择标签"
+        placeholder="搜索并选择标签"
         style="width: 100%"
       >
         <el-option
-          v-for="item in tagLibrary"
+          v-for="item in availableTagOptions"
           :key="item.id"
           :label="item.name"
           :value="item.id"
         />
       </el-select>
+      <p v-if="!tagEditLoading && availableTagOptions.length === 0" class="tag-select-hint">
+        暂无可添加的标签（已全部贴标或标签库为空）
+      </p>
       <template #footer>
         <el-button :disabled="tagSaving" @click="tagEditVisible = false">取消</el-button>
-        <el-button type="primary" :loading="tagSaving" @click="saveTags">保存</el-button>
+        <el-button type="primary" :loading="tagSaving" @click="saveTags">添加</el-button>
       </template>
     </el-dialog>
+
+    <CustomerAppointmentCreateDialog
+      v-model="appointmentCreateVisible"
+      :customer-id="customerId"
+      :customer-name="displayName"
+      @success="handleAppointmentCreated"
+    />
   </el-dialog>
 </template>
 
@@ -724,6 +949,41 @@ defineExpose({
   padding-top: 2px;
 }
 
+.profile-archive {
+  margin-bottom: 16px;
+}
+
+.archive-section + .archive-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.archive-title {
+  margin: 0 0 10px;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 20px;
+}
+
+.archive-cell-wide {
+  grid-column: 1 / -1;
+}
+
+.value.is-wrap {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .sub-tabs {
   margin-bottom: 8px;
 }
@@ -756,6 +1016,12 @@ defineExpose({
 
 .tag-chip {
   margin: 0 8px 8px 0;
+}
+
+.tag-select-hint {
+  margin: 10px 0 0;
+  color: #909399;
+  font-size: 12px;
 }
 
 @media (max-width: 1100px) {

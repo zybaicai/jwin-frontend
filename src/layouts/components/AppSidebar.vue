@@ -3,13 +3,20 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { appMenu } from '@/config/menu'
+import { usePermissionStore } from '@/stores/permission'
 
 defineProps<{
   collapsed: boolean
 }>()
 
 const route = useRoute()
+const permissionStore = usePermissionStore()
 const activePath = computed(() => route.path)
+const visibleMenu = computed(() =>
+  appMenu.filter(
+    (item) => item.permission == null || permissionStore.hasPermission(item.permission),
+  ),
+)
 </script>
 
 <template>
@@ -23,7 +30,7 @@ const activePath = computed(() => route.path)
       text-color="#bfcbd9"
       active-text-color="#409eff"
     >
-      <el-menu-item v-for="item in appMenu" :key="item.path" :index="item.path">
+      <el-menu-item v-for="item in visibleMenu" :key="item.path" :index="item.path">
         <el-icon>
           <component :is="item.icon" />
         </el-icon>

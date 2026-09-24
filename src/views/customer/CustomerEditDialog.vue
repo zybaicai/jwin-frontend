@@ -2,9 +2,17 @@
 import { reactive, ref, watch } from 'vue'
 
 import AppError from '@/components/common/AppError.vue'
-import { fetchCustomerDetail, fetchServicerOptions, updateCustomer } from '@/api/customer'
+import {
+  fetchCustomerDetail,
+  fetchServicerOptions,
+  findCustomerListItemById,
+  updateCustomer,
+} from '@/api/customer'
 import { getUserFriendlyErrorMessage, notifyError, runExclusive, uiMessage } from '@/utils/ui'
-import { pickMainNurseEmployees } from '@/views/customer/customer-format'
+import {
+  formatCustomerPickerLabel,
+  pickMainNurseEmployees,
+} from '@/views/customer/customer-format'
 
 const visible = defineModel<boolean>({ default: false })
 
@@ -22,6 +30,7 @@ const loadError = ref<string | null>(null)
 
 const sourceName = ref('—')
 const levelName = ref('—')
+const introducerLabel = ref('—')
 const nurseOptions = ref<{ id: string; name: string }[]>([])
 
 const form = reactive({
@@ -52,6 +61,7 @@ function resetForm(): void {
   form.nurseEmployeeId = ''
   sourceName.value = '—'
   levelName.value = '—'
+  introducerLabel.value = '—'
   nurseOptions.value = []
   initialSnapshot.value = ''
   loadError.value = null
@@ -74,6 +84,24 @@ async function loadDetail(): Promise<void> {
       sourceName.value = detail.sourceName || '—'
       levelName.value = detail.levelName || '—'
       initialSnapshot.value = snapshotOfForm()
+
+      try {
+        const keyword = detail.code?.trim() || detail.mobile?.trim() || detail.name?.trim() || ''
+        const listItem = await findCustomerListItemById(detail.id, keyword)
+        if (listItem?.introducerName) {
+          introducerLabel.value = formatCustomerPickerLabel({
+            name: listItem.introducerName,
+            mobile: null,
+            code: null,
+          })
+        } else if (listItem?.introducerCustomerId != null) {
+          introducerLabel.value = `客户#${listItem.introducerCustomerId}`
+        } else {
+          introducerLabel.value = '—'
+        }
+      } catch {
+        introducerLabel.value = '—'
+      }
 
       try {
         const roles = await fetchServicerOptions()
@@ -123,6 +151,7 @@ async function handleSubmit(): Promise<void> {
   await runExclusive(saving, async () => {
     try {
       // 故意不传 sourceId，首次来源不可改
+      // UpdateCustomerCommand 不含 introducerCustomerId，介绍人不可通过本页修改
       // 详情 VO 无 remark/address，本轮不提交这两项，避免误清空
       await updateCustomer(props.customerId!, {
         name: form.name.trim(),
@@ -178,6 +207,10 @@ watch(visible, (open) => {
       <el-form-item label="首次来源">
         <span class="readonly">{{ sourceName }}</span>
         <span class="hint">写入后不可修改</span>
+      </el-form-item>
+      <el-form-item label="介绍人">
+        <span class="readonly">{{ introducerLabel }}</span>
+        <span class="hint">后端暂不支持修改</span>
       </el-form-item>
       <el-form-item label="会员等级">
         <span class="readonly">{{ levelName }}</span>

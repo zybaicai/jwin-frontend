@@ -1,13 +1,30 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/types/response'
-import type { SaleOrderDetail } from '@/types/sale'
+import type { CreateSaleOrderRequest, SaleOrderDetail } from '@/types/sale'
 
 /**
  * GET /v1/sales/orders/{id} —— 销售订单详情（含明细与支付渠道）
  * 权限：sale:order:view
  */
 export async function fetchSaleOrderDetail(id: string): Promise<SaleOrderDetail> {
-  const response = await request.get<ApiResponse<SaleOrderDetail>>(`/v1/sales/orders/${encodeURIComponent(id)}`)
+  const response = await request.get<ApiResponse<SaleOrderDetail>>(
+    `/v1/sales/orders/${encodeURIComponent(id)}`,
+  )
+  const data = response.data.data
+  return {
+    ...data,
+    items: data.items ?? [],
+    payments: data.payments ?? [],
+  }
+}
+
+/**
+ * POST /v1/sales/orders —— 创建销售订单
+ * 权限：sale:order:create
+ * 本阶段仅封装 API，不在工作台提交完整收银。
+ */
+export async function createSaleOrder(body: CreateSaleOrderRequest): Promise<SaleOrderDetail> {
+  const response = await request.post<ApiResponse<SaleOrderDetail>>('/v1/sales/orders', body)
   const data = response.data.data
   return {
     ...data,
