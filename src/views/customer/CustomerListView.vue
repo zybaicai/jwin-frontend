@@ -5,6 +5,7 @@ import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
 import {
   exportCustomers,
+  fetchCustomerLevelOptions,
   fetchCustomerPage,
   fetchCustomerSourceOptions,
   fetchCustomerSourcePage,
@@ -12,6 +13,7 @@ import {
 } from '@/api/customer'
 import {
   CustomerPermission,
+  type CustomerLevelItem,
   type CustomerListItem,
   type CustomerListQuery,
   type CustomerSourceOption,
@@ -57,6 +59,7 @@ const moreFiltersOpen = ref(false)
 const queryForm = reactive({
   keyword: '',
   sourceId: undefined as number | undefined,
+  levelId: undefined as number | undefined,
   nurseEmployeeId: '' as string,
   caregiverEmployeeId: '' as string,
   introducerCustomerId: undefined as number | undefined,
@@ -68,6 +71,7 @@ const queryForm = reactive({
 })
 
 const sourceOptions = ref<CustomerSourceOption[]>([])
+const levelOptions = ref<CustomerLevelItem[]>([])
 const nurseOptions = ref<{ id: string; name: string }[]>([])
 const caregiverOptions = ref<{ id: string; name: string }[]>([])
 const introducerOptions = ref<CustomerListItem[]>([])
@@ -81,6 +85,7 @@ const hasActiveFilters = computed(() => {
   return (
     !!queryForm.keyword.trim() ||
     queryForm.sourceId != null ||
+    queryForm.levelId != null ||
     !!queryForm.nurseEmployeeId ||
     !!queryForm.caregiverEmployeeId ||
     queryForm.introducerCustomerId != null ||
@@ -93,6 +98,7 @@ const hasActiveFilters = computed(() => {
 const hasActiveMoreFilters = computed(() => {
   return (
     queryForm.sourceId != null ||
+    queryForm.levelId != null ||
     !!queryForm.caregiverEmployeeId ||
     queryForm.introducerCustomerId != null ||
     queryForm.memberOnRange != null ||
@@ -114,6 +120,7 @@ function buildListQuery(includePage: boolean): CustomerListQuery {
   const query: CustomerListQuery = {
     keyword: queryForm.keyword.trim() || undefined,
     sourceId: queryForm.sourceId,
+    levelId: queryForm.levelId,
     nurseEmployeeId: queryForm.nurseEmployeeId || undefined,
     caregiverEmployeeId: queryForm.caregiverEmployeeId || undefined,
     introducerCustomerId: queryForm.introducerCustomerId,
@@ -134,6 +141,15 @@ function buildListQuery(includePage: boolean): CustomerListQuery {
 }
 
 async function loadFilterOptions(): Promise<void> {
+  if (hasListPermission.value) {
+    try {
+      levelOptions.value = await fetchCustomerLevelOptions()
+    } catch {
+      levelOptions.value = []
+    }
+  } else {
+    levelOptions.value = []
+  }
   if (permissionStore.hasPermission(CustomerPermission.CREATE)) {
     try {
       const sources = await fetchCustomerSourceOptions()
@@ -201,6 +217,7 @@ async function handleSearch(): Promise<void> {
 async function handleReset(): Promise<void> {
   queryForm.keyword = ''
   queryForm.sourceId = undefined
+  queryForm.levelId = undefined
   queryForm.nurseEmployeeId = ''
   queryForm.caregiverEmployeeId = ''
   queryForm.introducerCustomerId = undefined
@@ -499,6 +516,22 @@ onUnmounted(() => {
             />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="levelOptions.length > 0" label="会员等级">
+          <el-select
+            v-model="queryForm.levelId"
+            clearable
+            filterable
+            placeholder="全部"
+            style="width: 160px"
+          >
+            <el-option
+              v-for="item in levelOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item v-if="caregiverOptions.length > 0" label="护理师">
           <el-select
             v-model="queryForm.caregiverEmployeeId"
@@ -712,6 +745,7 @@ onUnmounted(() => {
       v-model="detailVisible"
       :customer-id="activeCustomerId"
       @edit="openEditFromDetail"
+      @updated="loadCustomers"
     />
     <CustomerEditDialog
       v-model="editVisible"

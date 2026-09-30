@@ -7,9 +7,22 @@ import AuthInitErrorView from '@/views/AuthInitErrorView.vue'
 import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import CustomerListView from '@/views/customer/CustomerListView.vue'
+import CustomerLevelManageView from '@/views/customer/CustomerLevelManageView.vue'
 import CustomerSourceManageView from '@/views/customer/CustomerSourceManageView.vue'
 import CustomerTagManageView from '@/views/customer/CustomerTagManageView.vue'
 import SalesCashierView from '@/views/sale/SalesCashierView.vue'
+import ProjectCategoryManageView from '@/views/goods/ProjectCategoryManageView.vue'
+import CardCategoryManageView from '@/views/goods/CardCategoryManageView.vue'
+import ProjectManageView from '@/views/goods/ProjectManageView.vue'
+import ProductManageView from '@/views/goods/ProductManageView.vue'
+import GeneralCardManageView from '@/views/goods/GeneralCardManageView.vue'
+import TimeCardManageView from '@/views/goods/TimeCardManageView.vue'
+import SavingCardManageView from '@/views/goods/SavingCardManageView.vue'
+import SavingCardDiscountManageView from '@/views/goods/SavingCardDiscountManageView.vue'
+import PackageCardManageView from '@/views/goods/PackageCardManageView.vue'
+import ConsumableCategoryManageView from '@/views/goods/ConsumableCategoryManageView.vue'
+import ConsumableTemplateManageView from '@/views/goods/ConsumableTemplateManageView.vue'
+import UnderConstructionView from '@/views/common/UnderConstructionView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -64,7 +77,7 @@ const router = createRouter({
           component: CustomerListView,
           meta: {
             requiresAuth: true,
-            title: '客户管理',
+            title: '客户列表',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,
@@ -77,7 +90,7 @@ const router = createRouter({
           component: CustomerTagManageView,
           meta: {
             requiresAuth: true,
-            title: '客户标签管理',
+            title: '客户标签',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,
@@ -90,7 +103,20 @@ const router = createRouter({
           component: CustomerSourceManageView,
           meta: {
             requiresAuth: true,
-            title: '客户来源管理',
+            title: '客户来源',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'customers/levels',
+          name: 'customer-levels',
+          component: CustomerLevelManageView,
+          meta: {
+            requiresAuth: true,
+            title: '会员等级',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,
@@ -103,7 +129,180 @@ const router = createRouter({
           component: SalesCashierView,
           meta: {
             requiresAuth: true,
-            title: '销售开单',
+            title: '开单',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'sales/orders',
+          name: 'sale-orders',
+          component: UnderConstructionView,
+          meta: {
+            requiresAuth: true,
+            title: '销售订单',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'treat/orders',
+          name: 'treat-orders',
+          component: UnderConstructionView,
+          meta: {
+            requiresAuth: true,
+            title: '消耗订单',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/project-categories',
+          name: 'project-categories',
+          component: ProjectCategoryManageView,
+          meta: {
+            requiresAuth: true,
+            title: '项目分类',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/categories',
+          name: 'card-categories',
+          component: CardCategoryManageView,
+          meta: {
+            requiresAuth: true,
+            title: '卡类分类',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/card-categories',
+          redirect: { name: 'card-categories' },
+        },
+        {
+          path: 'goods/projects',
+          name: 'projects',
+          component: ProjectManageView,
+          meta: {
+            requiresAuth: true,
+            title: '项目管理',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/products',
+          name: 'products',
+          component: ProductManageView,
+          meta: {
+            requiresAuth: true,
+            title: '产品管理',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/general',
+          name: 'general-cards',
+          component: GeneralCardManageView,
+          meta: {
+            requiresAuth: true,
+            title: '通用次卡',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/time',
+          name: 'time-cards',
+          component: TimeCardManageView,
+          meta: {
+            requiresAuth: true,
+            title: '时效卡',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/saving',
+          name: 'saving-cards',
+          component: SavingCardManageView,
+          meta: {
+            requiresAuth: true,
+            title: '储值卡',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/saving-discounts',
+          name: 'saving-card-discounts',
+          component: SavingCardDiscountManageView,
+          meta: {
+            requiresAuth: true,
+            title: '储值区域折扣',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/cards/package',
+          name: 'package-cards',
+          component: PackageCardManageView,
+          meta: {
+            requiresAuth: true,
+            title: '套餐卡',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/consumables/categories',
+          name: 'consumable-categories',
+          component: ConsumableCategoryManageView,
+          meta: {
+            requiresAuth: true,
+            title: '耗材类别',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'goods/consumables/templates',
+          name: 'consumable-templates',
+          component: ConsumableTemplateManageView,
+          meta: {
+            requiresAuth: true,
+            title: '耗材模板',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,

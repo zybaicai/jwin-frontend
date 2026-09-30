@@ -1741,6 +1741,7 @@ GET /api/v1/customers/{id}
   "createdOn": "2023-12-01T09:00:00",
   "levelId": 1,
   "levelName": "金卡",
+  "lockMemberLevel": false,
   "member": true,
   "memberOn": "2024-01-15T10:00:00",
   "cardBalance": 1280.00,
@@ -1759,6 +1760,9 @@ GET /api/v1/customers/{id}
 字段说明：
 
 ```Plain Text
+levelId           当前会员等级 ID；当月无有效耗卡时可为 null
+levelName         当前会员等级名称
+lockMemberLevel   是否锁定会员等级（TB_Customer.IsLockMemberLevel）；true 时自动重算跳过
 cardBalance       卡项余额：剩余有效金额折算合计，不含赠送
                   储值卡取剩余本金；项目/产品/次卡/时效卡按剩余次数×单价折算
 giftBalance       赠送金额：储值卡剩余赠金 + 赠送项目/卡项按余量折算
@@ -3126,7 +3130,7 @@ GET /api/v1/cards/saving/{id}
 
 | 方法     | 路径      | 说明                         |
 | ------ | ------- | -------------------------- |
-| GET    | `/`     | 列表；`onlySellable` 可选       |
+| GET    | `/`     | 列表；`onlySellable` / `sortField` / `sortOrder` 可选 |
 | GET    | `/{id}` | 详情                         |
 | POST   | `/`     | 创建                         |
 | PUT    | `/{id}` | 更新                         |
@@ -3139,6 +3143,12 @@ GET /api/v1/cards/saving/{id}
 - 套餐明细合计**不强制**等于卡售价
 - 储值本金/赠金分列；B-05 `UnitPriceSnapshot` 本模块只加列，销售开户写入
 - 卡类**不**走项目 PriceResolution
+- **列表排序**（`GET /`）：
+  - 参数：`sortField`、`sortOrder`（`asc`/`desc`，大小写不敏感）
+  - 白名单：`id` / `name` / `price` / `allowSell`（对应列 ID、Name、Price、IsAllowSell）
+  - 未传 `sortField`：默认 `id desc`（与改造前一致）
+  - 非法字段：`code=PARAM`，提示「不支持的排序字段」
+  - 表结构无 `CreatedOn`，不支持 `createdOn`
 
 ---
 
@@ -3155,6 +3165,8 @@ DELETE /api/v1/saving-card-discounts/{id}
 权限：`card:saving-discount:view` / `card:saving-discount:edit`（`storeCheck=false`）
 
 列表过滤：`priceAreaId`、`projectId`（可选）
+
+列表排序：`sortField` / `sortOrder`；白名单 `id` / `active` / `discountRate`；默认 `id desc`；非法字段拒绝。表无 Name/Price/CreatedOn。
 
 正文：`priceAreaId`、`projectId`、`discountRate`(0,1]、`beginDate`/`endDate`、`active`、`remark`
 

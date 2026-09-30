@@ -1,12 +1,19 @@
 import { defineComponent, h, type Component, type VNode } from 'vue'
 
+/**
+ * 侧栏菜单项。
+ * - 有 children：父级分组，不绑定业务权限；任一子项可见则显示父级。
+ * - 无 children：叶子，path 必填；permission 有值时按权限过滤。
+ */
 export interface AppMenuItem {
-  path: string
+  /** 叶子必填；父级可省略（用 name 作为 submenu index） */
+  path?: string
   name: string
   title: string
-  icon: Component
-  /** 有值时仅在拥有该权限时显示菜单项 */
+  icon?: Component
+  /** 仅叶子；有值时仅在拥有该权限时显示 */
   permission?: string
+  children?: AppMenuItem[]
 }
 
 function menuIcon(name: string, markup: () => VNode[]): Component {
@@ -37,11 +44,6 @@ const IconHome = menuIcon('IconHome', () => [
   h('path', { d: 'M6 10 V20 H18 V10' }),
 ])
 
-const IconPlaceholder = menuIcon('IconPlaceholder', () => [
-  h('rect', { x: '4', y: '4', width: '16', height: '16', rx: '2' }),
-  h('path', { d: 'M8 12 H16' }),
-])
-
 const IconCustomers = menuIcon('IconCustomers', () => [
   h('circle', { cx: '9', cy: '8', r: '3' }),
   h('path', { d: 'M3 19 C3 15.5 5.5 14 9 14 C12.5 14 15 15.5 15 19' }),
@@ -56,9 +58,15 @@ const IconSales = menuIcon('IconSales', () => [
   h('circle', { cx: '18', cy: '17', r: '2' }),
 ])
 
+const IconGoods = menuIcon('IconGoods', () => [
+  h('path', { d: 'M4 7 L12 3 L20 7 L12 11 Z' }),
+  h('path', { d: 'M4 7 V17 L12 21 L20 17 V7' }),
+  h('path', { d: 'M12 11 V21' }),
+])
+
 /**
- * 静态菜单。不指向未注册的路由。
- * 带 permission 的项由 Sidebar 按权限过滤。
+ * 静态菜单树。叶子 path 必须已在 router 注册。
+ * 父级无 permission；子项权限由 Sidebar 过滤。
  */
 export const appMenu: AppMenuItem[] = [
   {
@@ -68,36 +76,161 @@ export const appMenu: AppMenuItem[] = [
     icon: IconHome,
   },
   {
-    path: '/customers',
-    name: 'customer-list',
+    name: 'group-customers',
     title: '客户管理',
     icon: IconCustomers,
+    children: [
+      {
+        path: '/customers',
+        name: 'customer-list',
+        title: '客户列表',
+        // 与改造前一致：菜单项不绑权限（页面内仍校验 customer:list:view）
+      },
+      {
+        path: '/customers/tags',
+        name: 'customer-tags',
+        title: '客户标签',
+        permission: 'customer:tag:view',
+      },
+      {
+        path: '/customers/sources',
+        name: 'customer-sources',
+        title: '客户来源',
+        permission: 'customer:source:view',
+      },
+      {
+        path: '/customers/levels',
+        name: 'customer-levels',
+        title: '会员等级',
+        permission: 'customer:level:view',
+      },
+    ],
   },
   {
-    path: '/customers/tags',
-    name: 'customer-tags',
-    title: '客户标签管理',
-    icon: IconCustomers,
-    permission: 'customer:tag:view',
+    name: 'group-goods',
+    title: '商品信息管理',
+    icon: IconGoods,
+    children: [
+      {
+        path: '/goods/project-categories',
+        name: 'project-categories',
+        title: '项目分类',
+        permission: 'project:category:view',
+      },
+      {
+        path: '/goods/cards/categories',
+        name: 'card-categories',
+        title: '卡类分类',
+        // 任一卡 view 权限即可进页；页内按卡类型再过滤 Tab
+      },
+      {
+        path: '/goods/projects',
+        name: 'projects',
+        title: '项目管理',
+        permission: 'project:view',
+      },
+      {
+        path: '/goods/products',
+        name: 'products',
+        title: '产品管理',
+        permission: 'product:view',
+      },
+      {
+        path: '/goods/cards/general',
+        name: 'general-cards',
+        title: '通用次卡',
+        permission: 'card:general:view',
+      },
+      {
+        path: '/goods/cards/time',
+        name: 'time-cards',
+        title: '时效卡',
+        permission: 'card:time:view',
+      },
+      {
+        path: '/goods/cards/saving',
+        name: 'saving-cards',
+        title: '储值卡',
+        permission: 'card:saving:view',
+      },
+      {
+        path: '/goods/cards/saving-discounts',
+        name: 'saving-card-discounts',
+        title: '储值区域折扣',
+        permission: 'card:saving-discount:view',
+      },
+      {
+        path: '/goods/cards/package',
+        name: 'package-cards',
+        title: '套餐卡',
+        permission: 'card:package:view',
+      },
+      {
+        path: '/goods/consumables/categories',
+        name: 'consumable-categories',
+        title: '耗材类别',
+        permission: 'consumable:view',
+      },
+      {
+        path: '/goods/consumables/templates',
+        name: 'consumable-templates',
+        title: '耗材模板',
+        permission: 'consumable:view',
+      },
+    ],
   },
   {
-    path: '/customers/sources',
-    name: 'customer-sources',
-    title: '客户来源管理',
-    icon: IconCustomers,
-    permission: 'customer:source:view',
-  },
-  {
-    path: '/sales/cashier',
-    name: 'sales-cashier',
-    title: '销售开单',
+    name: 'group-orders',
+    title: '订单管理',
     icon: IconSales,
-    permission: 'sale:order:create',
-  },
-  {
-    path: '/menu-placeholder',
-    name: 'menu-placeholder',
-    title: '菜单占位项用于验证超长标题省略不是业务模块',
-    icon: IconPlaceholder,
+    children: [
+      {
+        path: '/sales/cashier',
+        name: 'sales-cashier',
+        title: '开单',
+        permission: 'sale:order:create',
+      },
+      {
+        path: '/sales/orders',
+        name: 'sale-orders',
+        title: '销售订单',
+        permission: 'sale:order:view',
+      },
+      {
+        path: '/treat/orders',
+        name: 'treat-orders',
+        title: '消耗订单',
+        permission: 'treat:order:view',
+      },
+    ],
   },
 ]
+
+export interface MenuCrumb {
+  title: string
+}
+
+/** 按当前 path 解析「分组 / 叶子」面包屑；未命中返回空 */
+export function findMenuBreadcrumb(path: string): MenuCrumb[] {
+  for (const item of appMenu) {
+    if (item.children && item.children.length > 0) {
+      const child = item.children.find((c) => c.path === path)
+      if (child) {
+        return [{ title: item.title }, { title: child.title }]
+      }
+    } else if (item.path === path) {
+      return [{ title: item.title }]
+    }
+  }
+  return []
+}
+
+/** 当前 path 所属父级 submenu index（name），用于展开侧栏 */
+export function findOpenMenuIndexes(path: string): string[] {
+  for (const item of appMenu) {
+    if (item.children?.some((c) => c.path === path)) {
+      return [item.name]
+    }
+  }
+  return []
+}

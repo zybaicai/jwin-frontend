@@ -1,6 +1,8 @@
 /**
- * 销售订单类型。字段对齐后端 SaleOrderVo / CreateSaleOrderCommand / PaySaleOrderCommand。
+ * 销售订单类型。字段对齐后端 SaleOrderVo / CreateSaleOrderCommand / PaySaleOrderCommand / PayMethodVo。
  */
+
+import type { PageData } from '@/types/project'
 
 export interface SaleOrderItem {
   lineId: number | null
@@ -21,9 +23,10 @@ export interface SaleOrderPayment {
   amount: number | string | null
 }
 
-/** 对齐 SaleOrderVo —— GET /v1/sales/orders/{id} */
+/** 对齐 SaleOrderVo —— GET/POST /v1/sales/orders* */
 export interface SaleOrderDetail {
   id: string
+  /** LocalDateTime 序列化为字符串 */
   billDate: string | null
   storeId: number | null
   customerId: number | null
@@ -60,6 +63,7 @@ export interface CreateSaleOrderItem {
 /** 对齐 CreateSaleOrderCommand.Handler */
 export interface CreateSaleOrderHandler {
   employeeId: string
+  /** 0～100 百分比；全员未填时后端均分 */
   ratio?: number | string | null
 }
 
@@ -80,6 +84,7 @@ export interface CreateSaleOrderRequest {
   customerId: number
   storeId?: number | null
   saleChannelId: number
+  /** LocalDate yyyy-MM-dd；空=今天；补单需 sale:order:backdate */
   billDate?: string | null
   remark?: string | null
   items: CreateSaleOrderItem[]
@@ -88,6 +93,28 @@ export interface CreateSaleOrderRequest {
   payMethod?: string | null
   payments?: SalePaymentInput[] | null
 }
+
+/** 对齐 PaySaleOrderCommand —— POST /v1/sales/orders/{id}/pay */
+export interface PaySaleOrderRequest {
+  payments: SalePaymentInput[]
+}
+
+/** 对齐 PayMethodVo —— GET /v1/payments/methods */
+export interface PayMethodOption {
+  id: number
+  name: string | null
+  code: string | null
+}
+
+/** GET /v1/sales/orders 分页查询 */
+export interface SaleOrderPageQuery {
+  customerId?: number | null
+  status?: string | null
+  page?: number
+  size?: number
+}
+
+export type SaleOrderPageData = PageData<SaleOrderDetail>
 
 export const SalePermission = {
   ORDER_VIEW: 'sale:order:view',

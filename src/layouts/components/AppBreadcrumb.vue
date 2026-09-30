@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { findMenuBreadcrumb } from '@/config/menu'
+
 interface Crumb {
   path: string
   title: string
@@ -9,8 +11,15 @@ interface Crumb {
 
 const route = useRoute()
 
-const items = computed<Crumb[]>(() =>
-  route.matched.flatMap((record) => {
+const items = computed<Crumb[]>(() => {
+  const fromMenu = findMenuBreadcrumb(route.path)
+  if (fromMenu.length > 0) {
+    return fromMenu.map((c, index) => ({
+      path: `${route.path}#${index}`,
+      title: c.title,
+    }))
+  }
+  return route.matched.flatMap((record) => {
     if (record.meta.breadcrumb === false || typeof record.meta.title !== 'string') {
       return []
     }
@@ -18,8 +27,8 @@ const items = computed<Crumb[]>(() =>
       return []
     }
     return [{ path: record.path, title: record.meta.title }]
-  }),
-)
+  })
+})
 </script>
 
 <template>

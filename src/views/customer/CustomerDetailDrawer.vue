@@ -9,13 +9,16 @@ import {
   detachCustomerTag,
   fetchAllCustomerTags,
   fetchCustomerDetail,
+  fetchCustomerLevelOptions,
   fetchCustomerTags,
   findCustomerListItemById,
+  overrideCustomerMemberLevel,
 } from '@/api/customer'
 import {
   CustomerPermission,
   type CustomerDetail,
   type CustomerDetailTabKey,
+  type CustomerLevelItem,
   type CustomerListItem,
   type CustomerTagItem,
 } from '@/types/customer'
@@ -53,12 +56,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   edit: [customerId: number]
+  updated: []
 }>()
 
 const router = useRouter()
 const permissionStore = usePermissionStore()
 const canEditCustomer = computed(() =>
   permissionStore.hasPermission(CustomerPermission.EDIT),
+)
+const canOverrideLevel = computed(() =>
+  permissionStore.hasPermission(CustomerPermission.LEVEL_OVERRIDE),
 )
 
 const activeTab = ref<CustomerDetailTabKey>('profile')
@@ -84,6 +91,25 @@ const tagEditLoading = ref(false)
 const tagSaving = ref(false)
 const tagLibrary = ref<CustomerTagItem[]>([])
 const editingTagIds = ref<number[]>([])
+
+const levelDialogVisible = ref(false)
+const levelDialogLoading = ref(false)
+const levelSaving = ref(false)
+const levelDialogError = ref<string | null>(null)
+const levelOptions = ref<CustomerLevelItem[]>([])
+/** null = 清空等级；数字 = 指定等级 */
+const levelFormLevelId = ref<number | null>(null)
+/** 仅当详情返回了 boolean 锁定字段时可用 */
+const levelFormLocked = ref(false)
+
+const lockStatusKnown = computed(() => typeof detail.value?.lockMemberLevel === 'boolean')
+
+function formatLockStatus(lock: boolean | null | undefined): string {
+  if (typeof lock !== 'boolean') {
+    return '锁定状态未知'
+  }
+  return lock ? '已锁定' : '未锁定'
+}
 
 const visitedTabs = ref<Set<CustomerDetailTabKey>>(new Set(['profile']))
 const appointmentCreateVisible = ref(false)
@@ -138,6 +164,11 @@ function resetState(): void {
   tagEditVisible.value = false
   tagLibrary.value = []
   editingTagIds.value = []
+  levelDialogVisible.value = false
+  levelDialogError.value = null
+  levelOptions.value = []
+  levelFormLevelId.value = null
+  levelFormLocked.value = false
 }
 
 async function loadProfileExtra(current: CustomerDetail): Promise<void> {
@@ -280,6 +311,76 @@ async function openTagEditor(): Promise<void> {
   }
 }
 
+async function openLevelDialog(): Promise<void> {
+  if (props.customerId == null || !canOverrideLevel.value) {
+    return
+  }
+  levelDialogVisible.value = true
+  levelDialogError.value = null
+  levelFormLevelId.value = detail.value?.levelId ?? null
+  if (typeof detail.value?.lockMemberLevel === 'boolean') {
+    levelFormLocked.value = detail.value.lockMemberLevel
+  } else {
+    levelFormLocked.value = false
+    levelDialogError.value =
+      '详情未返回锁定状态（lockMemberLevel），无法可靠操作锁定；请刷新详情后重试'
+  }
+  levelDialogLoading.value = true
+  try {
+    levelOptions.value = await fetchCustomerLevelOptions()
+  } catch (error) {
+    levelOptions.value = []
+    levelDialogError.value = getUserFriendlyErrorMessage(error)
+    notifyError(error)
+  } finally {
+    levelDialogLoading.value = false
+  }
+}
+
+async function saveLevelOverride(): Promise<void> {
+  if (props.customerId == null) {
+    return
+  }
+  const customerId = props.customerId
+  const known = lockStatusKnown.value
+  if (!known) {
+    const proceed = await uiConfirm({
+      title: '锁定状态未知',
+      message:
+        '详情未返回 lockMemberLevel，本次仅更新等级、不修改锁定状态（不得默认当作未锁定）。是否继续？',
+      confirmText: '仅更新等级',
+    })
+    if (!proceed) {
+      return
+    }
+  }
+  const beforeLocked = known && detail.value?.lockMemberLevel === true
+  const unlocking = known && beforeLocked && !levelFormLocked.value
+  await runExclusive(levelSaving, async () => {
+    levelDialogError.value = null
+    try {
+      await overrideCustomerMemberLevel(customerId, {
+        updateLevel: true,
+        levelId: levelFormLevelId.value,
+        lockMemberLevel: known ? levelFormLocked.value : null,
+      })
+      if (unlocking) {
+        uiMessage.success('已保存；解除锁定后将按当前自然月累计耗卡重新计算等级')
+      } else if (known && levelFormLocked.value) {
+        uiMessage.success('会员等级已更新并锁定，自动重算将跳过')
+      } else {
+        uiMessage.success('会员等级已更新')
+      }
+      levelDialogVisible.value = false
+      await Promise.all([loadBasic(), loadTags()])
+      emit('updated')
+    } catch (error) {
+      levelDialogError.value = getUserFriendlyErrorMessage(error)
+      notifyError(error)
+    }
+  })
+}
+
 async function saveTags(): Promise<void> {
   if (props.customerId == null) {
     return
@@ -378,11 +479,30 @@ defineExpose({
                 <span class="name">{{ displayName }}</span>
                 <span v-if="genderSymbol" class="gender" :class="genderTone">{{ genderSymbol }}</span>
                 <span class="member-text">{{ formatMemberStatus(detail.member) }}</span>
-                <span v-if="detail.levelName" class="level-text">{{ detail.levelName }}</span>
+                <span class="level-text">{{ detail.levelName || '—' }}</span>
+                <el-tag
+                  v-if="typeof detail.lockMemberLevel === 'boolean'"
+                  size="small"
+                  :type="detail.lockMemberLevel ? 'warning' : 'info'"
+                  class="lock-tag"
+                >
+                  {{ formatLockStatus(detail.lockMemberLevel) }}
+                </el-tag>
+                <el-tag v-else size="small" type="danger" class="lock-tag">
+                  锁定状态未知
+                </el-tag>
               </div>
             </div>
           </div>
           <div class="profile-actions">
+            <button
+              v-permission="CustomerPermission.LEVEL_OVERRIDE"
+              type="button"
+              class="text-action"
+              @click="openLevelDialog"
+            >
+              调整等级
+            </button>
             <button
               v-permission="CustomerPermission.EDIT"
               type="button"
@@ -541,7 +661,25 @@ defineExpose({
                     </div>
                     <div class="info-cell">
                       <span class="label">会员等级</span>
-                      <span class="value">{{ detail.levelName || '—' }}</span>
+                      <span class="value level-value-row">
+                        <span>{{ detail.levelName || '—' }}</span>
+                        <el-tag
+                          v-if="typeof detail.lockMemberLevel === 'boolean'"
+                          size="small"
+                          :type="detail.lockMemberLevel ? 'warning' : 'info'"
+                        >
+                          {{ formatLockStatus(detail.lockMemberLevel) }}
+                        </el-tag>
+                        <el-tag v-else size="small" type="danger">锁定状态未知</el-tag>
+                        <button
+                          v-permission="CustomerPermission.LEVEL_OVERRIDE"
+                          type="button"
+                          class="text-action inline-level-action"
+                          @click="openLevelDialog"
+                        >
+                          调整
+                        </button>
+                      </span>
                     </div>
                     <div class="info-cell">
                       <span class="label">入会时间</span>
@@ -715,6 +853,67 @@ defineExpose({
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="levelDialogVisible"
+      title="调整会员等级"
+      width="480px"
+      append-to-body
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <div v-loading="levelDialogLoading">
+        <AppError v-if="levelDialogError" :description="levelDialogError" />
+        <el-form label-width="100px" @submit.prevent>
+          <el-form-item label="会员等级">
+            <el-select
+              v-model="levelFormLevelId"
+              clearable
+              filterable
+              placeholder="空表示清空等级"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="item in levelOptions"
+                :key="item.id"
+                :label="`${item.name}（门槛 ${item.levelValue}）`"
+                :value="item.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="锁定状态">
+            <template v-if="lockStatusKnown">
+              <el-switch
+                v-model="levelFormLocked"
+                inline-prompt
+                active-text="锁定"
+                inactive-text="未锁"
+              />
+              <p v-if="detail?.lockMemberLevel && !levelFormLocked" class="level-dialog-hint is-inline">
+                解除锁定后，后端将按当前自然月累计耗卡重新计算等级
+              </p>
+            </template>
+            <template v-else>
+              <span class="lock-unknown-text">详情未返回锁定状态，不得当作未锁定</span>
+            </template>
+          </el-form-item>
+          <p class="level-dialog-hint">
+            清空等级请清除上方选项后保存。当前状态：{{ formatLockStatus(detail?.lockMemberLevel) }}
+          </p>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button :disabled="levelSaving" @click="levelDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="levelSaving"
+          :disabled="!canOverrideLevel || levelDialogLoading"
+          @click="saveLevelOverride"
+        >
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
     <CustomerAppointmentCreateDialog
       v-model="appointmentCreateVisible"
       :customer-id="customerId"
@@ -804,6 +1003,37 @@ defineExpose({
 .level-text {
   color: #409eff;
   font-size: 13px;
+}
+
+.lock-tag {
+  margin-left: 6px;
+}
+
+.lock-unknown-text {
+  color: #f56c6c;
+  font-size: 13px;
+}
+
+.level-dialog-hint.is-inline {
+  margin: 8px 0 0;
+}
+
+.level-value-row {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-level-action {
+  padding: 0;
+  font-size: 13px;
+}
+
+.level-dialog-hint {
+  margin: 0 0 0 100px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .profile-actions {

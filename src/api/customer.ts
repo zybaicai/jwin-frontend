@@ -4,9 +4,11 @@ import { ApiCode } from '@/types/response'
 import { ApiBusinessError, ApiHttpError } from '@/utils/api-error'
 import type {
   CreateCustomerBody,
+  CreateCustomerLevelBody,
   CustomerCardItem,
   CustomerCardQuery,
   CustomerDetail,
+  CustomerLevelItem,
   CustomerListItem,
   CustomerListQuery,
   CustomerPaymentItem,
@@ -29,9 +31,11 @@ import type {
   CustomerSaleQuery,
   CustomerSourceOption,
   CustomerTagItem,
+  OverrideCustomerMemberLevelBody,
   PageData,
   ServicerOption,
   UpdateCustomerBody,
+  UpdateCustomerLevelBody,
 } from '@/types/customer'
 
 function toParams(query: CustomerListQuery): Record<string, string | number> {
@@ -708,4 +712,113 @@ export async function fetchCustomerServiceLogs(
     { params },
   )
   return response.data.data
+}
+
+/**
+ * GET /v1/customer-levels —— 会员等级分页
+ * 权限：customer:level:view
+ */
+export async function fetchCustomerLevelPage(params: {
+  keyword?: string
+  active?: boolean
+  activeOnly?: boolean
+  sortBy?: string
+  sortOrder?: string
+  page?: number
+  size?: number
+} = {}): Promise<PageData<CustomerLevelItem>> {
+  const query: Record<string, string | number | boolean> = {}
+  if (params.keyword != null && params.keyword.trim() !== '') {
+    query.keyword = params.keyword.trim()
+  }
+  if (params.active != null) {
+    query.active = params.active
+  }
+  if (params.activeOnly != null) {
+    query.activeOnly = params.activeOnly
+  }
+  if (params.sortBy != null && params.sortBy.trim() !== '') {
+    query.sortBy = params.sortBy.trim()
+  }
+  if (params.sortOrder != null && params.sortOrder.trim() !== '') {
+    query.sortOrder = params.sortOrder.trim()
+  }
+  if (params.page != null) {
+    query.page = params.page
+  }
+  if (params.size != null) {
+    query.size = params.size
+  }
+  const response = await request.get<ApiResponse<PageData<CustomerLevelItem>>>('/v1/customer-levels', {
+    params: query,
+  })
+  return response.data.data
+}
+
+/**
+ * GET /v1/customer-levels/options —— 启用等级下拉（列表筛选等）
+ * 权限：customer:list:view
+ */
+export async function fetchCustomerLevelOptions(): Promise<CustomerLevelItem[]> {
+  const response = await request.get<ApiResponse<CustomerLevelItem[]>>('/v1/customer-levels/options')
+  return response.data.data ?? []
+}
+
+/**
+ * GET /v1/customer-levels/{id} —— 等级详情
+ * 权限：customer:level:view
+ */
+export async function fetchCustomerLevelDetail(id: number): Promise<CustomerLevelItem> {
+  const response = await request.get<ApiResponse<CustomerLevelItem>>(
+    `/v1/customer-levels/${encodeURIComponent(String(id))}`,
+  )
+  return response.data.data
+}
+
+/**
+ * POST /v1/customer-levels —— 新增等级
+ * 权限：customer:level:edit
+ */
+export async function createCustomerLevel(body: CreateCustomerLevelBody): Promise<CustomerLevelItem> {
+  const response = await request.post<ApiResponse<CustomerLevelItem>>('/v1/customer-levels', body)
+  return response.data.data
+}
+
+/**
+ * PUT /v1/customer-levels/{id} —— 修改等级
+ * 权限：customer:level:edit
+ */
+export async function updateCustomerLevel(
+  id: number,
+  body: UpdateCustomerLevelBody,
+): Promise<CustomerLevelItem> {
+  const response = await request.put<ApiResponse<CustomerLevelItem>>(
+    `/v1/customer-levels/${encodeURIComponent(String(id))}`,
+    body,
+  )
+  return response.data.data
+}
+
+/**
+ * DELETE /v1/customer-levels/{id} —— 删除等级（仍有顾客使用时后端拒绝）
+ * 权限：customer:level:edit
+ */
+export async function deleteCustomerLevel(id: number): Promise<void> {
+  await request.delete<ApiResponse<null>>(
+    `/v1/customer-levels/${encodeURIComponent(String(id))}`,
+  )
+}
+
+/**
+ * PUT /v1/customers/{id}/member-level —— 管理员覆盖等级 / 锁定
+ * 权限：customer:level:override
+ */
+export async function overrideCustomerMemberLevel(
+  customerId: number,
+  body: OverrideCustomerMemberLevelBody,
+): Promise<void> {
+  await request.put<ApiResponse<null>>(
+    `/v1/customers/${encodeURIComponent(String(customerId))}/member-level`,
+    body,
+  )
 }

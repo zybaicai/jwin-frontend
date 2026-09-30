@@ -58,6 +58,11 @@ export interface CustomerDetail {
   createdOn: string | null
   levelId: number | null
   levelName: string | null
+  /**
+   * 是否锁定会员等级（对齐 CustomerDetailVo.lockMemberLevel / TB_Customer.IsLockMemberLevel）。
+   * 接口必须返回 boolean；缺失时前端不得当作 false。
+   */
+  lockMemberLevel: boolean | null
   member: boolean | null
   memberOn: string | null
   cardBalance: number | string | null
@@ -449,4 +454,58 @@ export const CustomerPermission = {
   SOURCE_EDIT: 'customer:source:edit',
   TAG_VIEW: 'customer:tag:view',
   TAG_EDIT: 'customer:tag:edit',
+  LEVEL_VIEW: 'customer:level:view',
+  LEVEL_EDIT: 'customer:level:edit',
+  LEVEL_OVERRIDE: 'customer:level:override',
 } as const
+
+/** 对齐 CustomerLevelVo */
+export interface CustomerLevelItem {
+  id: number
+  name: string
+  levelValue: number
+  reduceLevelValue: number | null
+  active: boolean | null
+  sequence: number | null
+}
+
+/** 对齐 CreateCustomerLevelCommand */
+export interface CreateCustomerLevelBody {
+  name: string
+  levelValue: number
+  reduceLevelValue?: number | null
+  sequence?: number | null
+  active?: boolean | null
+}
+
+/** 对齐 UpdateCustomerLevelCommand */
+export interface UpdateCustomerLevelBody {
+  name: string
+  levelValue: number
+  reduceLevelValue?: number | null
+  sequence: number
+  active: boolean
+}
+
+/**
+ * 对齐 OverrideCustomerMemberLevelCommand。
+ * - updateLevel=true：按 levelId 写入（null 表示清空）
+ * - updateLevel=false/null：不改等级
+ * - lockMemberLevel 非 null：更新锁定；解锁后后端按当月累计重算
+ */
+export interface OverrideCustomerMemberLevelBody {
+  updateLevel?: boolean | null
+  levelId?: number | null
+  lockMemberLevel?: boolean | null
+}
+
+/** 等级管理页排序白名单，对齐 CustomerLevelRules.isSortByAllowed */
+export const CUSTOMER_LEVEL_SORT_BY = [
+  'sequence',
+  'name',
+  'levelValue',
+  'active',
+  'id',
+] as const
+
+export type CustomerLevelSortBy = (typeof CUSTOMER_LEVEL_SORT_BY)[number]
