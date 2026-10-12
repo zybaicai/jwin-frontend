@@ -45,7 +45,10 @@ function filterMenu(items: AppMenuItem[]): AppMenuItem[] {
 
 const visibleMenu = computed(() => filterMenu(appMenu))
 
-const defaultOpeneds = computed(() => findOpenMenuIndexes(activePath.value))
+const defaultOpeneds = computed(() => {
+  const indexes = findOpenMenuIndexes(activePath.value)
+  return indexes.length ? [indexes[0]!] : []
+})
 
 /** 路由变化时强制同步展开态（default-openeds 仅首次生效） */
 const menuKey = computed(
@@ -61,10 +64,11 @@ const menuKey = computed(
       :collapse="collapsed"
       :default-active="activePath"
       :default-openeds="defaultOpeneds"
+      unique-opened
       router
-      background-color="#304156"
-      text-color="#bfcbd9"
-      active-text-color="#409eff"
+      background-color="transparent"
+      text-color="#94a3b8"
+      active-text-color="#f8fafc"
     >
       <template v-for="item in visibleMenu" :key="item.name">
         <el-sub-menu v-if="item.children && item.children.length > 0" :index="item.name">
@@ -106,6 +110,7 @@ const menuKey = computed(
 .sidebar-menu {
   border-right: none;
   min-height: 100%;
+  background: transparent !important;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
@@ -115,6 +120,10 @@ const menuKey = computed(
 .sidebar-menu:not(.el-menu--collapse) :deep(.el-menu-item),
 .sidebar-menu:not(.el-menu--collapse) :deep(.el-sub-menu__title) {
   overflow: hidden;
+  margin: 2px 8px;
+  border-radius: 8px;
+  height: 44px;
+  line-height: 44px;
 }
 
 .menu-title {
@@ -128,15 +137,38 @@ const menuKey = computed(
 
 .sidebar-menu :deep(.el-menu-item:hover),
 .sidebar-menu :deep(.el-sub-menu__title:hover) {
-  background-color: #263445;
+  background-color: rgba(148, 163, 184, 0.12) !important;
+  color: #e2e8f0 !important;
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.08)) !important;
+  color: #f8fafc !important;
+  font-weight: 600;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu) {
+  background: transparent !important;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
-  background-color: #1f2d3d;
+  background-color: transparent;
   min-width: 0;
+  padding-left: 48px !important;
+  height: 40px;
+  line-height: 40px;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item:hover) {
-  background-color: #263445;
+  background-color: rgba(148, 163, 184, 0.1) !important;
+}
+
+.sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.2), transparent) !important;
+  color: #f8fafc !important;
+}
+
+.sidebar-menu :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+  color: #e2e8f0 !important;
 }
 </style>

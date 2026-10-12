@@ -160,6 +160,8 @@ export interface SavingCardItem {
   remark: string | null
   allowSaleDeduct: boolean | null
   allowConsumeDeduct: boolean | null
+  /** 允许余额购买其他卡项 */
+  allowPayForCardPurchase: boolean | null
   goodsRange: boolean | null
   largessGoodsRange: boolean | null
   projects: SavingCardRangeProjectLine[] | null
@@ -179,6 +181,7 @@ export interface UpsertSavingCardBody {
   remark?: string | null
   allowSaleDeduct?: boolean | null
   allowConsumeDeduct?: boolean | null
+  allowPayForCardPurchase?: boolean | null
   goodsRange?: boolean | null
   largessGoodsRange?: boolean | null
   projects?: SavingCardRangeProjectLine[] | null

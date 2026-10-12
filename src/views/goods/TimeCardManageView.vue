@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onActivated, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -221,12 +221,11 @@ async function loadScopes(id: number): Promise<void> {
   consumeScopeMode.value = consumeIds.length === 0 ? 'all' : 'specified'
 }
 
-function openCreate(): void {
+async function openCreate(): Promise<void> {
   formMode.value = 'create'
   editingId.value = null
   form.name = ''
   inactiveCategoryOption.value = null
-  form.categoryId = categoryOptions.value[0]?.id ?? null
   form.price = ''
   form.consumeCycle = 0
   form.cycleLimitAmount = 0
@@ -242,6 +241,8 @@ function openCreate(): void {
   formError.value = null
   resetScope()
   formVisible.value = true
+  await loadCategoryOptions()
+  form.categoryId = categoryOptions.value[0]?.id ?? null
   void loadProjectOptions()
 }
 
@@ -398,6 +399,10 @@ watch(hasViewPermission, () => {
   void loadCategoryOptions()
   void loadList()
 }, { immediate: true })
+
+onActivated(() => {
+  void loadCategoryOptions()
+})
 </script>
 
 <template>

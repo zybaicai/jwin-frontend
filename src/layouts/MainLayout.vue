@@ -84,12 +84,13 @@ function viewComponent(
 
 .sidebar-area {
   display: flex;
-  flex: 0 0 200px;
+  flex: 0 0 220px;
   flex-direction: column;
-  width: 200px;
+  width: 220px;
   height: 100%;
   overflow: hidden;
-  background: #304156;
+  background: linear-gradient(180deg, #0f172a 0%, #111827 55%, #0b1220 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
   transition:
     flex-basis 0.2s ease,
     width 0.2s ease;

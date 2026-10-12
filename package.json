@@ -10,6 +10,7 @@
     "type-check": "vue-tsc -b --pretty false"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.20.0",
     "element-plus": "^2.14.6",
     "pinia": "^4.0.3",

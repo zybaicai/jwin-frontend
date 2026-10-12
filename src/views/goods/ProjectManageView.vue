@@ -23,6 +23,10 @@ import {
   fetchProjectChannelPrices,
   updateProjectChannelPrice,
 } from '@/api/price'
+import {
+  fetchConsumableTemplateDetail,
+  fetchConsumableTemplateList,
+} from '@/api/consumable'
 import { fetchSaleChannelOptions } from '@/api/sale-channel'
 import { fetchOrganizationTree, flattenStoreOptions } from '@/api/organization'
 import {
@@ -34,6 +38,10 @@ import {
   type ProjectSortField,
 } from '@/types/project'
 import { PricePermission, type ProjectChannelPriceItem } from '@/types/price'
+import {
+  ConsumablePermission,
+  type ConsumableTemplateItem,
+} from '@/types/consumable'
 import type { SaleChannelOption } from '@/types/sale-channel'
 import type { StoreOption } from '@/types/goods-scope'
 import { usePermissionStore } from '@/stores/permission'
@@ -50,6 +58,26 @@ import {
 defineOptions({ name: 'ProjectManageView' })
 
 const SORT_WHITELIST = new Set<string>(PROJECT_SORT_FIELDS)
+
+type FormTab =
+  | 'basic'
+  | 'adjust'
+  | 'saleScope'
+  | 'consumeScope'
+  | 'consumable'
+  | 'channelPrice'
+
+/** 新建时本地草稿渠道价（统一保存时再提交） */
+interface ChannelPriceDraft {
+  saleChannelId: number
+  saleChannelCode: string | null
+  saleChannelName: string | null
+  price: string
+  active: boolean
+  remark: string | null
+  saleEntityIds: number[]
+  consumeEntityIds: number[]
+}
 
 const permissionStore = usePermissionStore()
 const storeStore = useStoreStore()
@@ -69,6 +97,9 @@ const canEditChannelPrice = computed(
 )
 const hasOrgStoreView = computed(() =>
   permissionStore.hasPermission('org:store:view'),
+)
+const hasConsumableView = computed(() =>
+  permissionStore.hasPermission(ConsumablePermission.VIEW),
 )
 
 const loading = ref(false)
@@ -96,6 +127,7 @@ const formLoading = ref(false)
 const formSaving = ref(false)
 const formError = ref<string | null>(null)
 const editingId = ref<number | null>(null)
+const formActiveTab = ref<FormTab>('basic')
 
 const form = reactive({
   name: '',
@@ -122,6 +154,7 @@ const saleScopeMode = ref<'all' | 'specified'>('all')
 const consumeScopeMode = ref<'all' | 'specified'>('all')
 
 const channelPrices = ref<ProjectChannelPriceItem[]>([])
+const draftChannelPrices = ref<ChannelPriceDraft[]>([])
 const channelPricesLoading = ref(false)
 const channelPricesError = ref<string | null>(null)
 const saleChannelOptions = ref<SaleChannelOption[]>([])
@@ -141,12 +174,24 @@ const channelForm = reactive({
 })
 const channelDeactivating = ref<Set<number>>(new Set())
 
+const linkedConsumables = ref<ConsumableTemplateItem[]>([])
+const linkedConsumablesLoading = ref(false)
+const linkedConsumablesError = ref<string | null>(null)
+
 const tableDefaultSort = computed(() => ({
   prop: sortField.value,
   order: (sortOrder.value === 'asc' ? 'ascending' : 'descending') as
     | 'ascending'
     | 'descending',
 }))
+
+/** 渠道价表格数据：新建用草稿，编辑用服务端列表 */
+const displayChannelPrices = computed((): Array<ProjectChannelPriceItem | ChannelPriceDraft> => {
+  if (formMode.value === 'create') {
+    return draftChannelPrices.value
+  }
+  return channelPrices.value
+})
 
 function mapSortField(prop: string | null | undefined): ProjectSortField | null {
   if (prop == null || prop === '') {
@@ -206,6 +251,17 @@ async function loadStoreOptions(): Promise<void> {
       name: s.name,
     }))
     storeOptionsError.value = getUserFriendlyErrorMessage(error)
+  }
+}
+
+async function ensureSaleChannelOptions(): Promise<void> {
+  if (saleChannelOptions.value.length > 0) {
+    return
+  }
+  try {
+    saleChannelOptions.value = await fetchSaleChannelOptions()
+  } catch {
+    saleChannelOptions.value = []
   }
 }
 
@@ -300,9 +356,15 @@ function resetScopeState(): void {
 
 function resetChannelPriceState(): void {
   channelPrices.value = []
+  draftChannelPrices.value = []
   channelPricesError.value = null
   channelFormVisible.value = false
   channelFormError.value = null
+}
+
+function resetConsumableState(): void {
+  linkedConsumables.value = []
+  linkedConsumablesError.value = null
 }
 
 async function loadChannelPrices(projectId: number): Promise<void> {
@@ -327,6 +389,45 @@ async function loadChannelPrices(projectId: number): Promise<void> {
   }
 }
 
+/**
+ * 列表接口不含 projectIds；拉详情后筛「含当前项目」的模板。
+ * 只读展示，不改造耗材模块。
+ */
+async function loadLinkedConsumables(projectId: number): Promise<void> {
+  if (!hasConsumableView.value) {
+    linkedConsumables.value = []
+    linkedConsumablesError.value = '暂无权限查看耗材模板（consumable:view）'
+    return
+  }
+  linkedConsumablesLoading.value = true
+  linkedConsumablesError.value = null
+  try {
+    const rows = await fetchConsumableTemplateList({ onlyActive: true })
+    const enriched = await Promise.all(
+      rows.map(async (row) => {
+        try {
+          const detail = await fetchConsumableTemplateDetail(row.id)
+          return {
+            ...row,
+            projectIds: detail.projectIds ?? [],
+            categoryName: detail.categoryName ?? row.categoryName,
+          }
+        } catch {
+          return { ...row, projectIds: [] as number[] }
+        }
+      }),
+    )
+    linkedConsumables.value = enriched.filter((row) =>
+      (row.projectIds ?? []).includes(projectId),
+    )
+  } catch (error) {
+    linkedConsumables.value = []
+    linkedConsumablesError.value = getUserFriendlyErrorMessage(error)
+  } finally {
+    linkedConsumablesLoading.value = false
+  }
+}
+
 function formatScopeSummary(ids: number[] | null | undefined): string {
   if (ids == null || ids.length === 0) {
     return '全部可用'
@@ -338,8 +439,15 @@ function formatScopeSummary(ids: number[] | null | undefined): string {
   return names.join('、')
 }
 
+function channelRowLabel(row: ProjectChannelPriceItem | ChannelPriceDraft): string {
+  return row.saleChannelName || row.saleChannelCode || String(row.saleChannelId)
+}
+
 function openChannelCreate(): void {
-  if (!canEditChannelPrice.value || editingId.value == null) {
+  if (!canEditChannelPrice.value) {
+    return
+  }
+  if (formMode.value === 'edit' && editingId.value == null) {
     return
   }
   channelFormMode.value = 'create'
@@ -353,18 +461,11 @@ function openChannelCreate(): void {
   channelForm.consumeEntityIds = []
   channelFormError.value = null
   channelFormVisible.value = true
-  if (saleChannelOptions.value.length === 0) {
-    void fetchSaleChannelOptions()
-      .then((opts) => {
-        saleChannelOptions.value = opts
-      })
-      .catch(() => {
-        saleChannelOptions.value = []
-      })
-  }
+  void ensureSaleChannelOptions()
+  void loadStoreOptions()
 }
 
-function openChannelEdit(row: ProjectChannelPriceItem): void {
+function openChannelEdit(row: ProjectChannelPriceItem | ChannelPriceDraft): void {
   if (!canEditChannelPrice.value) {
     return
   }
@@ -386,47 +487,91 @@ function openChannelEdit(row: ProjectChannelPriceItem): void {
   channelForm.consumeScopeMode = consumeIds.length === 0 ? 'all' : 'specified'
   channelFormError.value = null
   channelFormVisible.value = true
+  void loadStoreOptions()
+}
+
+function buildChannelBody() {
+  return {
+    saleChannelId: channelForm.saleChannelId!,
+    price: normalizeAmountString(channelForm.price)!,
+    active: channelForm.active,
+    remark: channelForm.remark.trim() || null,
+    saleEntityIds:
+      channelForm.saleScopeMode === 'all' ? [] : [...channelForm.saleEntityIds],
+    consumeEntityIds:
+      channelForm.consumeScopeMode === 'all'
+        ? []
+        : [...channelForm.consumeEntityIds],
+  }
+}
+
+function validateChannelForm(): string | null {
+  if (channelForm.saleChannelId == null) {
+    return '请选择销售渠道'
+  }
+  if (normalizeAmountString(channelForm.price) == null) {
+    return '请填写合法渠道价格'
+  }
+  if (channelForm.saleScopeMode === 'specified' && channelForm.saleEntityIds.length === 0) {
+    return '指定销售范围时请选择至少一家门店'
+  }
+  if (
+    channelForm.consumeScopeMode === 'specified' &&
+    channelForm.consumeEntityIds.length === 0
+  ) {
+    return '指定消耗范围时请选择至少一家门店'
+  }
+  return null
 }
 
 async function handleChannelSubmit(): Promise<void> {
-  if (!canEditChannelPrice.value || editingId.value == null) {
+  if (!canEditChannelPrice.value) {
     return
   }
-  if (channelForm.saleChannelId == null) {
-    channelFormError.value = '请选择销售渠道'
+  const formErr = validateChannelForm()
+  if (formErr != null) {
+    channelFormError.value = formErr
     return
   }
-  const price = normalizeAmountString(channelForm.price)
-  if (price == null) {
-    channelFormError.value = '请填写合法渠道价格'
+
+  // 新建：写入本地草稿，随主表统一保存
+  if (formMode.value === 'create') {
+    const body = buildChannelBody()
+    const opt = saleChannelOptions.value.find((o) => o.id === body.saleChannelId)
+    const draft: ChannelPriceDraft = {
+      saleChannelId: body.saleChannelId,
+      saleChannelCode: opt?.code ?? null,
+      saleChannelName: opt?.name ?? null,
+      price: body.price,
+      active: body.active !== false,
+      remark: body.remark,
+      saleEntityIds: body.saleEntityIds,
+      consumeEntityIds: body.consumeEntityIds,
+    }
+    if (channelFormMode.value === 'create') {
+      if (draftChannelPrices.value.some((d) => d.saleChannelId === draft.saleChannelId)) {
+        channelFormError.value = '该销售渠道已在草稿中配置'
+        return
+      }
+      draftChannelPrices.value = [...draftChannelPrices.value, draft]
+      uiMessage.success('已加入草稿，保存项目时一并提交')
+    } else {
+      draftChannelPrices.value = draftChannelPrices.value.map((d) =>
+        d.saleChannelId === draft.saleChannelId ? draft : d,
+      )
+      uiMessage.success('草稿渠道价格已更新')
+    }
+    channelFormVisible.value = false
+    return
+  }
+
+  if (editingId.value == null) {
     return
   }
   await runExclusive(channelFormSaving, async () => {
     channelFormError.value = null
     try {
-      if (channelForm.saleScopeMode === 'specified' && channelForm.saleEntityIds.length === 0) {
-        channelFormError.value = '指定销售范围时请选择至少一家门店'
-        return
-      }
-      if (
-        channelForm.consumeScopeMode === 'specified' &&
-        channelForm.consumeEntityIds.length === 0
-      ) {
-        channelFormError.value = '指定消耗范围时请选择至少一家门店'
-        return
-      }
-      const body = {
-        saleChannelId: channelForm.saleChannelId!,
-        price,
-        active: channelForm.active,
-        remark: channelForm.remark.trim() || null,
-        saleEntityIds:
-          channelForm.saleScopeMode === 'all' ? [] : [...channelForm.saleEntityIds],
-        consumeEntityIds:
-          channelForm.consumeScopeMode === 'all'
-            ? []
-            : [...channelForm.consumeEntityIds],
-      }
+      const body = buildChannelBody()
       if (channelFormMode.value === 'create') {
         await createProjectChannelPrice(editingId.value!, body)
         uiMessage.success('渠道价格已新增')
@@ -442,13 +587,35 @@ async function handleChannelSubmit(): Promise<void> {
   })
 }
 
-async function handleChannelDeactivate(row: ProjectChannelPriceItem): Promise<void> {
-  if (!canEditChannelPrice.value || editingId.value == null || row.active === false) {
+async function handleChannelDeactivate(
+  row: ProjectChannelPriceItem | ChannelPriceDraft,
+): Promise<void> {
+  if (!canEditChannelPrice.value || row.active === false) {
+    return
+  }
+
+  if (formMode.value === 'create') {
+    const ok = await uiConfirm({
+      title: '移除确认',
+      message: `确认从草稿中移除渠道「${channelRowLabel(row)}」的价格配置？`,
+      confirmText: '移除',
+    })
+    if (!ok) {
+      return
+    }
+    draftChannelPrices.value = draftChannelPrices.value.filter(
+      (d) => d.saleChannelId !== row.saleChannelId,
+    )
+    uiMessage.success('已从草稿移除')
+    return
+  }
+
+  if (editingId.value == null) {
     return
   }
   const ok = await uiConfirm({
     title: '停用确认',
-    message: `确认停用渠道「${row.saleChannelName || row.saleChannelId}」的价格配置？停用后收银选该渠道将回落到其他价源/基价。`,
+    message: `确认停用渠道「${channelRowLabel(row)}」的价格配置？停用后收银选该渠道将回落到其他价源/基价。`,
     confirmText: '停用',
   })
   if (!ok) {
@@ -495,6 +662,7 @@ async function loadScopes(projectId: number): Promise<void> {
 function openCreate(): void {
   formMode.value = 'create'
   editingId.value = null
+  formActiveTab.value = 'basic'
   form.name = ''
   form.alias = ''
   form.categoryId = null
@@ -508,13 +676,17 @@ function openCreate(): void {
   formError.value = null
   resetScopeState()
   resetChannelPriceState()
+  resetConsumableState()
   formVisible.value = true
   void loadCategoryTrees()
+  void loadStoreOptions()
+  void ensureSaleChannelOptions()
 }
 
 async function openEdit(row: ProjectItem): Promise<void> {
   formMode.value = 'edit'
   editingId.value = row.id
+  formActiveTab.value = 'basic'
   form.name = row.name ?? ''
   form.alias = row.alias ?? ''
   form.categoryId = row.categoryId
@@ -529,6 +701,7 @@ async function openEdit(row: ProjectItem): Promise<void> {
   formError.value = null
   resetScopeState()
   resetChannelPriceState()
+  resetConsumableState()
   formVisible.value = true
   formLoading.value = true
   void loadCategoryTrees()
@@ -550,7 +723,11 @@ async function openEdit(row: ProjectItem): Promise<void> {
     form.allowLargess = detail.allowLargess === true
     form.brandId = detail.brandId
     form.remark = detail.remark ?? ''
-    await Promise.all([loadScopes(row.id), loadChannelPrices(row.id)])
+    await Promise.all([
+      loadScopes(row.id),
+      loadChannelPrices(row.id),
+      loadLinkedConsumables(row.id),
+    ])
   } catch (error) {
     notifyError(error)
   } finally {
@@ -591,9 +768,26 @@ async function saveScopes(projectId: number): Promise<void> {
   ])
 }
 
+async function submitDraftChannelPrices(projectId: number): Promise<void> {
+  if (!canEditChannelPrice.value || draftChannelPrices.value.length === 0) {
+    return
+  }
+  for (const draft of draftChannelPrices.value) {
+    await createProjectChannelPrice(projectId, {
+      saleChannelId: draft.saleChannelId,
+      price: draft.price,
+      active: draft.active,
+      remark: draft.remark,
+      saleEntityIds: draft.saleEntityIds,
+      consumeEntityIds: draft.consumeEntityIds,
+    })
+  }
+}
+
 async function handleSubmit(): Promise<void> {
   const err = validateForm()
   if (err != null) {
+    formActiveTab.value = 'basic'
     uiMessage.warning(err)
     return
   }
@@ -601,6 +795,7 @@ async function handleSubmit(): Promise<void> {
   const price = normalizeAmountString(form.price)
   const categoryId = form.categoryId
   if (price == null || categoryId == null) {
+    formActiveTab.value = 'basic'
     return
   }
   await runExclusive(formSaving, async () => {
@@ -620,12 +815,12 @@ async function handleSubmit(): Promise<void> {
           brandId: form.brandId,
           remark: form.remark.trim() || null,
         })
-        editingId.value = created.id
-        formMode.value = 'edit'
-        resetScopeState()
-        await loadStoreOptions()
-        await loadScopes(created.id)
-        uiMessage.success('项目已创建，请配置销售/消耗范围后再次保存')
+        await runExclusive(scopeSaving, async () => {
+          await saveScopes(created.id)
+        })
+        await submitDraftChannelPrices(created.id)
+        uiMessage.success('项目已创建')
+        formVisible.value = false
         await loadList()
       } else if (editingId.value != null) {
         await updateProject(editingId.value, {
@@ -907,77 +1102,256 @@ watch(
     <el-dialog
       v-model="formVisible"
       :title="formMode === 'create' ? '新增项目' : '编辑项目'"
-      width="640px"
+      width="820px"
       destroy-on-close
       :close-on-click-modal="false"
+      class="project-form-dialog"
     >
       <div v-loading="formLoading || scopeLoading">
         <AppError v-if="formError" :description="formError" />
-        <el-form label-width="140px" @submit.prevent>
-          <el-form-item label="项目名称" required>
-            <el-input
-              v-model="form.name"
-              maxlength="50"
-              show-word-limit
-              placeholder="请输入项目名称"
-            />
-          </el-form-item>
-          <el-form-item label="别名">
-            <el-input v-model="form.alias" maxlength="50" show-word-limit />
-          </el-form-item>
-          <el-form-item label="项目类型/项目分类" required>
-            <el-select
-              v-model="form.categoryId"
-              filterable
-              placeholder="请选择项目分类（仅启用；非销售渠道）"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="opt in formCategoryOptions"
-                :key="opt.id"
-                :label="opt.label"
-                :value="opt.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="基价" required>
-            <el-input v-model="form.price" placeholder="如 199.00" />
-          </el-form-item>
-          <el-form-item label="服务时长">
-            <el-input-number
-              v-model="form.treatTime"
-              :min="0"
-              :step="1"
-              :precision="0"
-              controls-position="right"
-              style="width: 100%"
-              placeholder="分钟"
-            />
-          </el-form-item>
-          <el-form-item label="允许销售">
-            <el-switch v-model="form.allowSell" />
-          </el-form-item>
-          <el-form-item label="允许消耗">
-            <el-switch v-model="form.allowConsume" />
-          </el-form-item>
-          <el-form-item label="允许赠送">
-            <el-switch v-model="form.allowLargess" />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input
-              v-model="form.remark"
-              type="textarea"
-              maxlength="200"
-              show-word-limit
-              :rows="2"
-            />
-          </el-form-item>
+        <el-tabs v-model="formActiveTab" class="project-form-tabs">
+          <el-tab-pane label="基本信息" name="basic">
+            <el-form label-width="120px" @submit.prevent>
+              <el-row :gutter="16">
+                <el-col :span="12">
+                  <el-form-item label="项目名称" required>
+                    <el-input
+                      v-model="form.name"
+                      maxlength="50"
+                      show-word-limit
+                      placeholder="请输入项目名称"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="项目别名">
+                    <el-input
+                      v-model="form.alias"
+                      maxlength="50"
+                      show-word-limit
+                      placeholder="请输入项目别名"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="项目分类" required>
+                    <el-select
+                      v-model="form.categoryId"
+                      filterable
+                      placeholder="请选择项目分类（仅启用）"
+                      style="width: 100%"
+                    >
+                      <el-option
+                        v-for="opt in formCategoryOptions"
+                        :key="opt.id"
+                        :label="opt.label"
+                        :value="opt.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="基价" required>
+                    <el-input v-model="form.price" placeholder="如 199.00">
+                      <template #append>元</template>
+                    </el-input>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="服务时长">
+                    <el-input-number
+                      v-model="form.treatTime"
+                      :min="0"
+                      :step="1"
+                      :precision="0"
+                      controls-position="right"
+                      style="width: 100%"
+                      placeholder="分钟"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="允许销售">
+                    <el-switch v-model="form.allowSell" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="允许消耗">
+                    <el-switch v-model="form.allowConsume" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="允许赠送">
+                    <el-switch v-model="form.allowLargess" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="24">
+                  <el-form-item label="备注">
+                    <el-input
+                      v-model="form.remark"
+                      type="textarea"
+                      maxlength="200"
+                      show-word-limit
+                      :rows="3"
+                      placeholder="请输入备注信息"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+          </el-tab-pane>
 
-          <template v-if="formMode === 'edit' && editingId != null">
-            <el-divider content-position="left">渠道价格</el-divider>
+          <el-tab-pane label="改价范围" name="adjust">
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              title="改价权限按岗位在价格权限配置，本项目开单改价受渠道报价 allowAdjust 约束"
+            />
+            <p class="scope-hint tab-hint">
+              当前无项目级改价范围接口；开单临时改价是否允许，以报价结果中的
+              <code>allowAdjust</code> 及岗位价格权限为准，请在「价格权限 / 岗位权限」中配置。
+            </p>
+          </el-tab-pane>
+
+          <el-tab-pane label="销售范围" name="saleScope">
+            <p class="scope-hint">
+              项目级销售范围仅作历史数据与未带渠道的通用目录展示参考，
+              <strong>不能</strong>让未配置有效渠道价的项目继续按该渠道开单。
+            </p>
+            <AppError v-if="scopeError" :description="scopeError" />
+            <AppError v-if="storeOptionsError" :description="storeOptionsError" />
+            <el-form label-width="100px" @submit.prevent>
+              <el-form-item label="销售范围">
+                <div class="scope-block">
+                  <el-radio-group
+                    v-model="saleScopeMode"
+                    :disabled="!hasEditPermission"
+                  >
+                    <el-radio value="all">全部可用</el-radio>
+                    <el-radio value="specified">指定适用门店</el-radio>
+                  </el-radio-group>
+                  <el-select
+                    v-if="saleScopeMode === 'specified'"
+                    v-model="saleEntityIds"
+                    multiple
+                    filterable
+                    collapse-tags
+                    collapse-tags-tooltip
+                    placeholder="选择适用门店"
+                    style="width: 100%; margin-top: 8px"
+                    :disabled="!hasEditPermission"
+                  >
+                    <el-option
+                      v-for="s in storeOptions"
+                      :key="s.id"
+                      :label="s.name"
+                      :value="s.id"
+                    />
+                  </el-select>
+                </div>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+
+          <el-tab-pane label="消耗范围" name="consumeScope">
+            <p class="scope-hint">
+              项目级消耗范围用于账户无法解析原销售渠道时的耗卡兼容；
+              已售资产耗卡不因渠道价后来停用而阻断。
+            </p>
+            <AppError v-if="scopeError" :description="scopeError" />
+            <AppError v-if="storeOptionsError" :description="storeOptionsError" />
+            <el-form label-width="100px" @submit.prevent>
+              <el-form-item label="消耗范围">
+                <div class="scope-block">
+                  <el-radio-group
+                    v-model="consumeScopeMode"
+                    :disabled="!hasEditPermission"
+                  >
+                    <el-radio value="all">全部可用</el-radio>
+                    <el-radio value="specified">指定适用门店</el-radio>
+                  </el-radio-group>
+                  <el-select
+                    v-if="consumeScopeMode === 'specified'"
+                    v-model="consumeEntityIds"
+                    multiple
+                    filterable
+                    collapse-tags
+                    collapse-tags-tooltip
+                    placeholder="选择适用门店"
+                    style="width: 100%; margin-top: 8px"
+                    :disabled="!hasEditPermission"
+                  >
+                    <el-option
+                      v-for="s in storeOptions"
+                      :key="s.id"
+                      :label="s.name"
+                      :value="s.id"
+                    />
+                  </el-select>
+                </div>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+
+          <el-tab-pane label="耗材" name="consumable">
+            <template v-if="formMode === 'create'">
+              <el-alert
+                type="warning"
+                :closable="false"
+                show-icon
+                title="请先保存项目后再关联耗材模板"
+              />
+              <p class="scope-hint tab-hint">
+                耗材模板在「商品管理 → 耗材模板」中维护适用项目；本页仅做只读关联展示。
+              </p>
+            </template>
+            <template v-else>
+              <p class="scope-hint">
+                以下为已关联本项目的耗材模板（只读）。如需增删关联，请前往
+                <router-link to="/goods/consumables/templates">耗材模板</router-link>
+                管理。
+              </p>
+              <AppError v-if="linkedConsumablesError" :description="linkedConsumablesError" />
+              <el-table
+                v-loading="linkedConsumablesLoading"
+                :data="linkedConsumables"
+                border
+                size="small"
+                empty-text="暂无关联耗材模板"
+                style="width: 100%"
+              >
+                <el-table-column label="模板名称" min-width="160" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ (row as ConsumableTemplateItem).name || '—' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="类别" min-width="120" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ (row as ConsumableTemplateItem).categoryName || '—' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="90">
+                  <template #default="{ row }">
+                    <el-tag
+                      :type="(row as ConsumableTemplateItem).active === false ? 'info' : 'success'"
+                      size="small"
+                    >
+                      {{ (row as ConsumableTemplateItem).active === false ? '停用' : '启用' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </template>
+          </el-tab-pane>
+
+          <el-tab-pane label="渠道价格配置" name="channelPrice">
             <p class="scope-hint">
               同一项目可配置多个销售渠道总部价；每个渠道独立配置销售范围与消耗范围（全部门店 / 指定门店）。
               未配置或已停用的渠道不可选、不可报价、不可开单；空范围表示该渠道全部可用门店。
+              <template v-if="formMode === 'create'">
+                新建时可先维护草稿，保存项目时一并提交。
+              </template>
             </p>
             <AppError v-if="channelPricesError" :description="channelPricesError" />
             <div class="channel-toolbar">
@@ -992,44 +1366,60 @@ watch(
               <span v-else class="scope-hint">需同时具备 project:edit 与 price:channel:edit 方可编辑</span>
             </div>
             <el-table
-              v-loading="channelPricesLoading"
-              :data="channelPrices"
+              v-loading="formMode === 'edit' && channelPricesLoading"
+              :data="displayChannelPrices"
               border
               size="small"
-              empty-text="暂无渠道价格（未配置有效渠道价时不可按该渠道报价或开单）"
-              style="width: 100%; margin-bottom: 12px"
+              :empty-text="
+                formMode === 'create'
+                  ? '暂无草稿渠道价格'
+                  : '暂无渠道价格（未配置有效渠道价时不可按该渠道报价或开单）'
+              "
+              style="width: 100%"
             >
               <el-table-column label="渠道名称" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{
-                    (row as ProjectChannelPriceItem).saleChannelName
-                      || (row as ProjectChannelPriceItem).saleChannelCode
-                      || (row as ProjectChannelPriceItem).saleChannelId
-                  }}
+                  {{ channelRowLabel(row as ProjectChannelPriceItem | ChannelPriceDraft) }}
                 </template>
               </el-table-column>
               <el-table-column label="渠道价格" width="100" align="right">
                 <template #default="{ row }">
-                  {{ formatAmountDisplay((row as ProjectChannelPriceItem).price) }}
+                  {{ formatAmountDisplay((row as ProjectChannelPriceItem | ChannelPriceDraft).price) }}
                 </template>
               </el-table-column>
               <el-table-column label="销售范围" min-width="140" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ formatScopeSummary((row as ProjectChannelPriceItem).saleEntityIds) }}
+                  {{
+                    formatScopeSummary(
+                      (row as ProjectChannelPriceItem | ChannelPriceDraft).saleEntityIds,
+                    )
+                  }}
                 </template>
               </el-table-column>
               <el-table-column label="消耗范围" min-width="140" show-overflow-tooltip>
                 <template #default="{ row }">
-                  {{ formatScopeSummary((row as ProjectChannelPriceItem).consumeEntityIds) }}
+                  {{
+                    formatScopeSummary(
+                      (row as ProjectChannelPriceItem | ChannelPriceDraft).consumeEntityIds,
+                    )
+                  }}
                 </template>
               </el-table-column>
               <el-table-column label="状态" width="80">
                 <template #default="{ row }">
                   <el-tag
-                    :type="(row as ProjectChannelPriceItem).active === false ? 'info' : 'success'"
+                    :type="
+                      (row as ProjectChannelPriceItem | ChannelPriceDraft).active === false
+                        ? 'info'
+                        : 'success'
+                    "
                     size="small"
                   >
-                    {{ (row as ProjectChannelPriceItem).active === false ? '停用' : '启用' }}
+                    {{
+                      (row as ProjectChannelPriceItem | ChannelPriceDraft).active === false
+                        ? '停用'
+                        : '启用'
+                    }}
                   </el-tag>
                 </template>
               </el-table-column>
@@ -1039,94 +1429,34 @@ watch(
                     v-if="canEditChannelPrice"
                     link
                     type="primary"
-                    @click="openChannelEdit(row as ProjectChannelPriceItem)"
+                    @click="openChannelEdit(row as ProjectChannelPriceItem | ChannelPriceDraft)"
                   >
                     编辑
                   </el-button>
                   <el-button
-                    v-if="canEditChannelPrice && (row as ProjectChannelPriceItem).active !== false"
+                    v-if="
+                      canEditChannelPrice &&
+                      (row as ProjectChannelPriceItem | ChannelPriceDraft).active !== false
+                    "
                     link
                     type="warning"
-                    :disabled="channelDeactivating.has((row as ProjectChannelPriceItem).saleChannelId)"
-                    @click="handleChannelDeactivate(row as ProjectChannelPriceItem)"
+                    :disabled="
+                      formMode === 'edit' &&
+                      channelDeactivating.has(
+                        (row as ProjectChannelPriceItem | ChannelPriceDraft).saleChannelId,
+                      )
+                    "
+                    @click="
+                      handleChannelDeactivate(row as ProjectChannelPriceItem | ChannelPriceDraft)
+                    "
                   >
-                    停用
+                    {{ formMode === 'create' ? '移除' : '停用' }}
                   </el-button>
                 </template>
               </el-table-column>
             </el-table>
-
-            <el-divider content-position="left">销售范围 / 消耗范围（旧数据兼容）</el-divider>
-            <p class="scope-hint">
-              项目级销售范围仅作历史数据与未带渠道的通用目录展示参考，
-              <strong>不能</strong>让未配置有效渠道价的项目继续按该渠道开单。
-              项目级消耗范围用于账户无法解析原销售渠道时的耗卡兼容；
-              已售资产耗卡不因渠道价后来停用而阻断。
-            </p>
-            <AppError v-if="scopeError" :description="scopeError" />
-            <AppError v-if="storeOptionsError" :description="storeOptionsError" />
-
-            <el-form-item label="销售范围">
-              <div class="scope-block">
-                <el-radio-group
-                  v-model="saleScopeMode"
-                  :disabled="!hasEditPermission"
-                >
-                  <el-radio value="all">全部可用</el-radio>
-                  <el-radio value="specified">指定适用门店</el-radio>
-                </el-radio-group>
-                <el-select
-                  v-if="saleScopeMode === 'specified'"
-                  v-model="saleEntityIds"
-                  multiple
-                  filterable
-                  collapse-tags
-                  collapse-tags-tooltip
-                  placeholder="选择适用门店"
-                  style="width: 100%; margin-top: 8px"
-                  :disabled="!hasEditPermission"
-                >
-                  <el-option
-                    v-for="s in storeOptions"
-                    :key="s.id"
-                    :label="s.name"
-                    :value="s.id"
-                  />
-                </el-select>
-              </div>
-            </el-form-item>
-
-            <el-form-item label="消耗范围">
-              <div class="scope-block">
-                <el-radio-group
-                  v-model="consumeScopeMode"
-                  :disabled="!hasEditPermission"
-                >
-                  <el-radio value="all">全部可用</el-radio>
-                  <el-radio value="specified">指定适用门店</el-radio>
-                </el-radio-group>
-                <el-select
-                  v-if="consumeScopeMode === 'specified'"
-                  v-model="consumeEntityIds"
-                  multiple
-                  filterable
-                  collapse-tags
-                  collapse-tags-tooltip
-                  placeholder="选择适用门店"
-                  style="width: 100%; margin-top: 8px"
-                  :disabled="!hasEditPermission"
-                >
-                  <el-option
-                    v-for="s in storeOptions"
-                    :key="s.id"
-                    :label="s.name"
-                    :value="s.id"
-                  />
-                </el-select>
-              </div>
-            </el-form-item>
-          </template>
-        </el-form>
+          </el-tab-pane>
+        </el-tabs>
       </div>
       <template #footer>
         <el-button :disabled="formSaving || scopeSaving" @click="formVisible = false">
@@ -1176,7 +1506,7 @@ watch(
             :disabled="!canEditChannelPrice"
           />
         </el-form-item>
-        <el-form-item v-if="channelFormMode === 'edit'" label="启用状态">
+        <el-form-item v-if="channelFormMode === 'edit' && formMode === 'edit'" label="启用状态">
           <el-switch
             v-model="channelForm.active"
             active-text="启用"
@@ -1253,6 +1583,9 @@ watch(
         </el-form-item>
         <p class="scope-hint">
           总部渠道价写 PriceAreaID=0、EntityID=0；销售/消耗门店写入渠道桥接表，不得误用 EntityID 作范围。
+          <template v-if="formMode === 'create'">
+            当前为新建草稿，保存项目时才会提交到服务端。
+          </template>
         </p>
         <AppError v-if="storeOptionsError" :description="storeOptionsError" />
       </el-form>
@@ -1264,7 +1597,7 @@ watch(
           :loading="channelFormSaving"
           @click="handleChannelSubmit"
         >
-          保存
+          {{ formMode === 'create' ? '确定' : '保存' }}
         </el-button>
       </template>
     </el-dialog>
@@ -1326,6 +1659,11 @@ watch(
   margin: 0 0 12px;
   font-size: 12px;
   color: #909399;
+  line-height: 1.6;
+}
+
+.tab-hint {
+  margin-top: 12px;
 }
 
 .scope-block {
@@ -1340,9 +1678,11 @@ watch(
   margin-bottom: 8px;
 }
 
-.scope-tag {
-  margin-left: 4px;
-  font-size: 11px;
-  color: #a8abb2;
+.project-form-tabs {
+  min-height: 360px;
+}
+
+.project-form-tabs :deep(.el-tabs__content) {
+  padding-top: 8px;
 }
 </style>

@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/types/response'
 import type {
+  CreateSaleOrderHandler,
   CreateSaleOrderRequest,
   PayMethodOption,
   PaySaleOrderRequest,
@@ -8,6 +9,7 @@ import type {
   SaleOrderPageData,
   SaleOrderPageQuery,
 } from '@/types/sale'
+import { normalizeSaleOrderDetail } from '@/utils/sale/normalizeSaleOrder'
 
 function buildParams(
   query: Record<string, string | number | boolean | undefined | null>,
@@ -23,11 +25,7 @@ function buildParams(
 }
 
 function normalizeOrder(data: SaleOrderDetail): SaleOrderDetail {
-  return {
-    ...data,
-    items: data.items ?? [],
-    payments: data.payments ?? [],
-  }
+  return normalizeSaleOrderDetail(data)
 }
 
 /**
@@ -52,6 +50,11 @@ export async function fetchSaleOrderPage(
     params: buildParams({
       customerId: query.customerId,
       status: query.status,
+      billId: query.billId,
+      billType: query.billType,
+      keyword: query.keyword,
+      billDateFrom: query.billDateFrom,
+      billDateTo: query.billDateTo,
       page: query.page,
       size: query.size,
     }),
@@ -66,7 +69,7 @@ export async function fetchSaleOrderPage(
 /**
  * POST /v1/sales/orders —— 创建销售订单
  * 权限：sale:order:create（补单另需 sale:order:backdate）
- * 本阶段仅封装 API，不在收银台提交完整收银。
+ * 可附带 payments 在同一事务内登记收款并完成入账（人工记账，非第三方扣款）。
  */
 export async function createSaleOrder(body: CreateSaleOrderRequest): Promise<SaleOrderDetail> {
   const response = await request.post<ApiResponse<SaleOrderDetail>>('/v1/sales/orders', body)
@@ -74,8 +77,9 @@ export async function createSaleOrder(body: CreateSaleOrderRequest): Promise<Sal
 }
 
 /**
- * POST /v1/sales/orders/{id}/pay —— 补记收款
+ * POST /v1/sales/orders/{id}/pay —— 人工登记收款（记账）
  * 权限：sale:order:pay
+ * 不对接微信/支付宝等外部支付；成功后后端更新已收/欠款并发放权益。
  */
 export async function paySaleOrder(
   id: string,
@@ -97,6 +101,38 @@ export async function closeSaleOrder(id: string): Promise<SaleOrderDetail> {
     `/v1/sales/orders/${encodeURIComponent(id)}/close`,
   )
   return normalizeOrder(response.data.data)
+}
+
+/**
+ * PUT /v1/sales/orders/{id}/handlers —— 修改销售经手人
+ * 权限：sale:order:edit-handler
+ */
+export async function updateSaleOrderHandlers(
+  id: string,
+  handlers: CreateSaleOrderHandler[],
+): Promise<SaleOrderDetail> {
+  const response = await request.put<ApiResponse<SaleOrderDetail>>(
+    `/v1/sales/orders/${encodeURIComponent(id)}/handlers`,
+    { handlers },
+  )
+  return normalizeOrder(response.data.data)
+}
+
+/**
+ * POST /v1/refunds —— 创建销售退款申请（取消已支付且未消耗订单）
+ * 权限：refund:order:create
+ */
+export async function createSaleRefund(body: {
+  sourceOrderId: string
+  reason?: string
+}): Promise<{ id: string }> {
+  const response = await request.post<ApiResponse<{ id: string }>>('/v1/refunds', {
+    refundType: 'SALE',
+    sourceOrderId: body.sourceOrderId,
+    reason: body.reason ?? '取消订单',
+    payments: [],
+  })
+  return response.data.data
 }
 
 /**

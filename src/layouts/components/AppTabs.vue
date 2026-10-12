@@ -25,12 +25,22 @@ async function closeTab(key: string): Promise<void> {
   }
 }
 
-function refreshCurrent(): void {
+async function closeOtherTabs(): Promise<void> {
   const current = tabsStore.activeTab
   if (current == null) {
     return
   }
-  tabsStore.refreshTab(current.key)
+  const others = tabsStore.tabs.filter((tab) => tab.closable && tab.key !== current.key)
+  for (const tab of others) {
+    const allowed = await canCloseTab(tab.key)
+    if (!allowed) {
+      return
+    }
+  }
+  tabsStore.closeOtherTabs(current.key)
+  if (router.currentRoute.value.path !== current.path) {
+    await router.push(current.path)
+  }
 }
 </script>
 
@@ -59,7 +69,15 @@ function refreshCurrent(): void {
         </div>
       </div>
     </div>
-    <button type="button" class="tab-refresh" @click="refreshCurrent">刷新</button>
+    <button
+      type="button"
+      class="tab-action"
+      title="关闭其它窗口"
+      :disabled="tabsStore.tabs.filter((t) => t.closable && t.key !== tabsStore.activeKey).length === 0"
+      @click="closeOtherTabs"
+    >
+      关闭其它
+    </button>
   </div>
 </template>
 
@@ -100,14 +118,14 @@ function refreshCurrent(): void {
 }
 
 .tab.is-active {
-  border-color: #409eff;
-  background: #ecf5ff;
-  color: #409eff;
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
 }
 
 .tab-title,
 .tab-close,
-.tab-refresh {
+.tab-action {
   border: 0;
   background: transparent;
   color: inherit;
@@ -128,9 +146,20 @@ function refreshCurrent(): void {
   line-height: 1;
 }
 
-.tab-refresh {
+.tab-action {
   flex: 0 0 auto;
   padding: 0 12px;
   color: #606266;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tab-action:hover:not(:disabled) {
+  color: var(--el-color-primary);
+}
+
+.tab-action:disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
 }
 </style>

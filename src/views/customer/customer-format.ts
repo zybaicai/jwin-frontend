@@ -97,6 +97,23 @@ export function formatMemberStatus(member: boolean | null | undefined): string {
   return '—'
 }
 
+/** 手机号脱敏：保留前 3 后 4，中间以 * 代替；过短则原样返回 */
+export function maskMobile(mobile: string | null | undefined): string {
+  if (mobile == null) {
+    return '—'
+  }
+  const raw = mobile.trim()
+  if (!raw) {
+    return '—'
+  }
+  if (raw.length < 7) {
+    return raw
+  }
+  const head = raw.slice(0, 3)
+  const tail = raw.slice(-4)
+  return `${head}${'*'.repeat(Math.min(raw.length - 7, 4))}${tail}`
+}
+
 /** 客户选择器选项文案：姓名 + 手机号（同名时区分） */
 export function formatCustomerPickerLabel(item: {
   name?: string | null

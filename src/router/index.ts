@@ -11,6 +11,9 @@ import CustomerLevelManageView from '@/views/customer/CustomerLevelManageView.vu
 import CustomerSourceManageView from '@/views/customer/CustomerSourceManageView.vue'
 import CustomerTagManageView from '@/views/customer/CustomerTagManageView.vue'
 import SalesCashierView from '@/views/sale/SalesCashierView.vue'
+import SaleOrderListView from '@/views/sale/SaleOrderListView.vue'
+import SaleOrderDetailView from '@/views/sale/SaleOrderDetailView.vue'
+import TreatOrderListView from '@/views/sale/TreatOrderListView.vue'
 import ProjectCategoryManageView from '@/views/goods/ProjectCategoryManageView.vue'
 import CardCategoryManageView from '@/views/goods/CardCategoryManageView.vue'
 import ProjectManageView from '@/views/goods/ProjectManageView.vue'
@@ -139,7 +142,7 @@ const router = createRouter({
         {
           path: 'sales/orders',
           name: 'sale-orders',
-          component: UnderConstructionView,
+          component: SaleOrderListView,
           meta: {
             requiresAuth: true,
             title: '销售订单',
@@ -150,9 +153,22 @@ const router = createRouter({
           },
         },
         {
+          path: 'sales/orders/:orderId',
+          name: 'sale-order-detail',
+          component: SaleOrderDetailView,
+          meta: {
+            requiresAuth: true,
+            title: '销售订单详情',
+            keepAlive: false,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: false,
+          },
+        },
+        {
           path: 'treat/orders',
           name: 'treat-orders',
-          component: UnderConstructionView,
+          component: TreatOrderListView,
           meta: {
             requiresAuth: true,
             title: '消耗订单',

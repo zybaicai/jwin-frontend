@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
-import { fetchSaleOrderDetail } from '@/api/sale'
-import type { SaleOrderDetail } from '@/types/sale'
-import { getUserFriendlyErrorMessage, runExclusive } from '@/utils/ui'
-import { formatDateTime, formatMoney } from '@/views/customer/customer-format'
+import SaleOrderDetailContent from '@/components/sale/SaleOrderDetailContent.vue'
+import SaleOrderHandlersDialog from '@/components/sale/SaleOrderHandlersDialog.vue'
+import { closeSaleOrder, createSaleRefund, fetchSaleOrderDetail } from '@/api/sale'
+import {
+  RefundPermission,
+  SalePermission,
+  type SaleOrderDetail,
+} from '@/types/sale'
+import { usePermissionStore } from '@/stores/permission'
+import {
+  getUserFriendlyErrorMessage,
+  runExclusive,
+  uiConfirm,
+  uiMessage,
+} from '@/utils/ui'
 
 defineOptions({ name: 'SaleOrderDetailDialog' })
 
@@ -16,13 +27,47 @@ const props = defineProps<{
   orderId: string | null
 }>()
 
+const emit = defineEmits<{
+  changed: []
+}>()
+
+const permissionStore = usePermissionStore()
+
 const loading = ref(false)
+const actionLoading = ref(false)
 const loadError = ref<string | null>(null)
 const detail = ref<SaleOrderDetail | null>(null)
+const handlersVisible = ref(false)
+
+const canClose = computed(() => permissionStore.hasPermission(SalePermission.ORDER_CLOSE))
+const canRefund = computed(() => permissionStore.hasPermission(RefundPermission.ORDER_CREATE))
+const canEditHandler = computed(() =>
+  permissionStore.hasPermission(SalePermission.ORDER_EDIT_HANDLER),
+)
+
+const status = computed(() => detail.value?.billStatus ?? '')
+const unpaid = computed(() => status.value === '草稿' || status.value === '待支付')
+const paid = computed(() => status.value === '已支付')
+const showCancel = computed(() => {
+  if (unpaid.value) {
+    return canClose.value
+  }
+  if (paid.value) {
+    return canRefund.value
+  }
+  return false
+})
+const showEditHandler = computed(() => {
+  if (!canEditHandler.value || !detail.value) {
+    return false
+  }
+  return status.value !== '已关闭' && status.value !== '已退款'
+})
 
 function resetState(): void {
   detail.value = null
   loadError.value = null
+  handlersVisible.value = false
 }
 
 async function loadDetail(): Promise<void> {
@@ -42,6 +87,58 @@ async function loadDetail(): Promise<void> {
   })
 }
 
+async function onCancelOrder(): Promise<void> {
+  const order = detail.value
+  if (!order?.id) {
+    return
+  }
+  if (paid.value && order.hasConsumedAssets) {
+    uiMessage.warning('卡项已产生消耗，无法取消')
+    return
+  }
+  const ok = await uiConfirm({
+    title: '取消订单',
+    message: unpaid.value
+      ? '确认取消该未支付订单？取消后订单将关闭。'
+      : '确认取消该已支付订单？将提交销售退款申请（需审批后执行入账冲回）。',
+    confirmText: '确认取消',
+  })
+  if (!ok) {
+    return
+  }
+  await runExclusive(actionLoading, async () => {
+    try {
+      if (unpaid.value) {
+        detail.value = await closeSaleOrder(order.id)
+        uiMessage.success('订单已取消（关闭）')
+      } else {
+        // 再次以服务端详情为准，避免列表缓存导致误提交退款
+        const latest = await fetchSaleOrderDetail(order.id)
+        if (latest.hasConsumedAssets) {
+          detail.value = latest
+          uiMessage.warning('卡项已产生消耗，无法取消')
+          return
+        }
+        await createSaleRefund({ sourceOrderId: order.id, reason: '取消订单' })
+        detail.value = await fetchSaleOrderDetail(order.id)
+        uiMessage.success('已提交退款申请，请在退款审批通过后执行')
+      }
+      emit('changed')
+    } catch (error) {
+      uiMessage.error(getUserFriendlyErrorMessage(error))
+    }
+  })
+}
+
+function onOpenHandlers(): void {
+  handlersVisible.value = true
+}
+
+function onHandlersSaved(order: SaleOrderDetail): void {
+  detail.value = order
+  emit('changed')
+}
+
 watch(visible, (open) => {
   if (!open) {
     resetState()
@@ -57,183 +154,75 @@ watch(visible, (open) => {
     v-model="visible"
     class="sale-order-detail-dialog"
     title="销售订单详情"
-    width="760px"
+    width="820px"
     append-to-body
     destroy-on-close
     :close-on-click-modal="false"
   >
+    <template #header="{ titleId, titleClass }">
+      <div class="dialog-header">
+        <span :id="titleId" :class="titleClass">销售订单详情</span>
+        <div class="header-actions">
+          <el-button
+            v-if="showCancel"
+            size="small"
+            type="danger"
+            plain
+            :loading="actionLoading"
+            :disabled="loading"
+            @click="onCancelOrder"
+          >
+            取消订单
+          </el-button>
+          <el-button
+            v-if="showEditHandler"
+            size="small"
+            :disabled="loading || actionLoading"
+            @click="onOpenHandlers"
+          >
+            修改经手人业绩提成
+          </el-button>
+        </div>
+      </div>
+    </template>
+
     <AppError
       v-if="loadError && !loading"
       :description="loadError"
       @retry="loadDetail"
     />
-    <div v-else v-loading="loading" class="detail-body">
-      <template v-if="detail">
-        <section class="section">
-          <h3 class="section-title">订单基础信息</h3>
-          <dl class="field-grid">
-            <div class="field-row">
-              <dt>订单编号</dt>
-              <dd>{{ detail.id || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>订单状态</dt>
-              <dd>{{ detail.billStatus || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>订单类型</dt>
-              <dd>{{ detail.billType || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>订单时间</dt>
-              <dd>{{ formatDateTime(detail.billDate) }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>客户</dt>
-              <dd>{{ detail.customerName || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>备注</dt>
-              <dd>{{ detail.remark || '—' }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="section">
-          <h3 class="section-title">门店信息</h3>
-          <dl class="field-grid">
-            <div class="field-row">
-              <dt>开单门店</dt>
-              <dd>{{ detail.saleStoreName || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>顾客归属门店</dt>
-              <dd>{{ detail.customerBelongStoreName || '—' }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="section">
-          <h3 class="section-title">销售方式与金额</h3>
-          <dl class="field-grid">
-            <div class="field-row">
-              <dt>销售渠道</dt>
-              <dd>{{ detail.saleChannelCode || '—' }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>订单总金额</dt>
-              <dd>{{ formatMoney(detail.totalAmount) }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>实付金额</dt>
-              <dd>{{ formatMoney(detail.payAmount) }}</dd>
-            </div>
-            <div class="field-row">
-              <dt>欠款金额</dt>
-              <dd class="is-danger">{{ formatMoney(detail.arrearAmount) }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section class="section">
-          <h3 class="section-title">商品明细</h3>
-          <el-table :data="detail.items" border stripe size="small" empty-text="暂无明细">
-            <el-table-column prop="itemName" label="名称" min-width="140" show-overflow-tooltip>
-              <template #default="{ row }">
-                {{ row.itemName || '—' }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="itemType" label="类型" min-width="100" show-overflow-tooltip>
-              <template #default="{ row }">
-                {{ row.itemType || '—' }}
-              </template>
-            </el-table-column>
-            <el-table-column label="数量" width="80" align="right">
-              <template #default="{ row }">
-                {{ row.quantity != null ? row.quantity : '—' }}
-              </template>
-            </el-table-column>
-            <el-table-column label="单价" min-width="100" align="right">
-              <template #default="{ row }">
-                {{ formatMoney(row.price) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="金额" min-width="100" align="right">
-              <template #default="{ row }">
-                {{ formatMoney(row.totalAmount) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="赠送" width="70" align="center">
-              <template #default="{ row }">
-                {{ row.gift === true ? '是' : '否' }}
-              </template>
-            </el-table-column>
-          </el-table>
-        </section>
-
-        <section class="section">
-          <h3 class="section-title">支付渠道</h3>
-          <el-table :data="detail.payments" border stripe size="small" empty-text="暂无支付记录">
-            <el-table-column prop="payMethodName" label="支付方式" min-width="140">
-              <template #default="{ row }">
-                {{ row.payMethodName || '—' }}
-              </template>
-            </el-table-column>
-            <el-table-column label="金额" min-width="120" align="right">
-              <template #default="{ row }">
-                {{ formatMoney(row.amount) }}
-              </template>
-            </el-table-column>
-          </el-table>
-        </section>
-      </template>
+    <div v-else v-loading="loading || actionLoading" class="detail-body">
+      <SaleOrderDetailContent v-if="detail" :detail="detail" />
       <AppEmpty v-else-if="!loading" title="暂无订单详情" />
     </div>
+
+    <SaleOrderHandlersDialog
+      v-model="handlersVisible"
+      :detail="detail"
+      @saved="onHandlersSaved"
+    />
   </el-dialog>
 </template>
 
 <style scoped>
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding-right: 4px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 28px;
+}
+
 .detail-body {
   min-height: 160px;
-}
-
-.section {
-  margin-bottom: 16px;
-}
-
-.section-title {
-  margin: 0 0 8px;
-  color: #303133;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.field-grid {
-  margin: 0;
-  border-top: 1px solid #ebeef5;
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.field-row dt {
-  color: #909399;
-  font-size: 13px;
-}
-
-.field-row dd {
-  margin: 0;
-  color: #303133;
-  font-size: 14px;
-  word-break: break-all;
-}
-
-.is-danger {
-  color: #f56c6c;
 }
 </style>

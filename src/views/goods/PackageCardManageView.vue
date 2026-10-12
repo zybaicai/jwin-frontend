@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onActivated, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -238,12 +238,69 @@ function emptyLine(): ChildLineForm {
   return { itemId: null, price: '0', amount: 1, largess: false }
 }
 
-function openCreate(): void {
+/** 收费子项 TotalPrice 默认=Price；赠送不计总价 */
+function lineChargeTotal(line: ChildLineForm): number {
+  if (line.largess) {
+    return 0
+  }
+  const p = normalizeAmountString(line.price)
+  if (p == null) {
+    return 0
+  }
+  const n = Number(p)
+  return Number.isFinite(n) ? n : 0
+}
+
+const computedPackagePrice = computed(() => {
+  let sum = 0
+  for (const line of [
+    ...form.projects,
+    ...form.products,
+    ...form.generalCards,
+    ...form.timeCards,
+    ...form.savingCards,
+  ]) {
+    if (line.itemId == null) {
+      continue
+    }
+    sum += lineChargeTotal(line)
+  }
+  return sum.toFixed(2)
+})
+
+watch(
+  () =>
+    [
+      ...form.projects.map((l) => [l.itemId, l.price, l.largess] as const),
+      ...form.products.map((l) => [l.itemId, l.price, l.largess] as const),
+      ...form.generalCards.map((l) => [l.itemId, l.price, l.largess] as const),
+      ...form.timeCards.map((l) => [l.itemId, l.price, l.largess] as const),
+      ...form.savingCards.map((l) => [l.itemId, l.price, l.largess] as const),
+    ] as const,
+  () => {
+    form.price = computedPackagePrice.value
+    for (const groups of [
+      form.projects,
+      form.products,
+      form.generalCards,
+      form.timeCards,
+      form.savingCards,
+    ]) {
+      for (const line of groups) {
+        if (line.largess) {
+          line.price = '0'
+        }
+      }
+    }
+  },
+  { deep: true },
+)
+
+async function openCreate(): Promise<void> {
   formMode.value = 'create'
   editingId.value = null
   form.name = ''
   inactiveCategoryOption.value = null
-  form.categoryId = categoryOptions.value[0]?.id ?? null
   form.price = ''
   form.validType = 0
   form.validDay = null
@@ -260,6 +317,9 @@ function openCreate(): void {
   formError.value = null
   resetScope()
   formVisible.value = true
+  // 打开新建时重新拉分类，避免在其它页新建分类后本页缓存过期
+  await loadCategoryOptions()
+  form.categoryId = categoryOptions.value[0]?.id ?? null
   void loadChildOptions()
 }
 
@@ -335,17 +395,6 @@ async function openEdit(row: PackageCardItem): Promise<void> {
   }
 }
 
-function toItemBody(lines: ChildLineForm[]) {
-  return lines
-    .filter((l) => l.itemId != null)
-    .map((l) => ({
-      itemId: l.itemId as number,
-      price: normalizeAmountString(l.price) ?? '0',
-      amount: l.amount,
-      largess: l.largess,
-    }))
-}
-
 function validateForm(): string | null {
   if (form.categoryId == null) {
     return '请选择分类'
@@ -353,19 +402,46 @@ function validateForm(): string | null {
   if (!form.name.trim()) {
     return '请填写套餐名称'
   }
-  if (normalizeAmountString(form.price) == null) {
-    return '请填写合法售价'
-  }
   const projects = form.projects.filter((l) => l.itemId != null)
   if (formMode.value === 'create' && projects.length === 0) {
     return '套餐卡至少包含一个项目'
   }
-  for (const line of projects) {
-    if (normalizeAmountString(line.price) == null) {
-      return '项目子项售价不合法'
+  for (const line of [
+    ...form.projects,
+    ...form.products,
+    ...form.generalCards,
+    ...form.timeCards,
+    ...form.savingCards,
+  ]) {
+    if (line.itemId == null) {
+      continue
+    }
+    if (line.amount == null || line.amount < 1) {
+      return '子项次数须至少为 1'
+    }
+    if (!line.largess && normalizeAmountString(line.price) == null) {
+      return '收费子项价格不合法'
     }
   }
   return null
+}
+
+function toChargeLineBody(line: ChildLineForm): {
+  itemId: number
+  price: string
+  amount: number
+  totalPrice: string
+  largess: boolean
+} {
+  const largess = line.largess === true
+  const price = largess ? '0' : (normalizeAmountString(line.price) ?? '0')
+  return {
+    itemId: line.itemId as number,
+    price,
+    amount: line.amount,
+    totalPrice: price,
+    largess,
+  }
 }
 
 async function handleSubmit(): Promise<void> {
@@ -374,18 +450,19 @@ async function handleSubmit(): Promise<void> {
     uiMessage.warning(err)
     return
   }
-  const price = normalizeAmountString(form.price)
-  if (price == null) {
-    return
-  }
+  const price = computedPackagePrice.value
   const projects = form.projects
     .filter((l) => l.itemId != null)
-    .map((l) => ({
-      projectId: l.itemId as number,
-      price: normalizeAmountString(l.price) ?? '0',
-      amount: l.amount,
-      largess: l.largess,
-    }))
+    .map((l) => {
+      const body = toChargeLineBody(l)
+      return {
+        projectId: body.itemId,
+        price: body.price,
+        amount: body.amount,
+        totalPrice: body.totalPrice,
+        largess: body.largess,
+      }
+    })
   // 编辑时始终传非 null 集合，语义=全量替换；创建同理
   const body = {
     name: form.name.trim(),
@@ -399,10 +476,10 @@ async function handleSubmit(): Promise<void> {
     allowLargess: form.allowLargess,
     remark: form.remark.trim() || null,
     projects,
-    products: toItemBody(form.products),
-    generalCards: toItemBody(form.generalCards),
-    timeCards: toItemBody(form.timeCards),
-    savingCards: toItemBody(form.savingCards),
+    products: form.products.filter((l) => l.itemId != null).map(toChargeLineBody),
+    generalCards: form.generalCards.filter((l) => l.itemId != null).map(toChargeLineBody),
+    timeCards: form.timeCards.filter((l) => l.itemId != null).map(toChargeLineBody),
+    savingCards: form.savingCards.filter((l) => l.itemId != null).map(toChargeLineBody),
   }
   await runExclusive(formSaving, async () => {
     formError.value = null
@@ -480,6 +557,11 @@ watch(hasViewPermission, () => {
   void loadCategoryOptions()
   void loadList()
 }, { immediate: true })
+
+/** keepAlive 返回本页时刷新分类下拉（例如刚在分类页新建过） */
+onActivated(() => {
+  void loadCategoryOptions()
+})
 </script>
 
 <template>
@@ -616,8 +698,8 @@ watch(hasViewPermission, () => {
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="售价" required>
-            <el-input v-model="form.price" placeholder="不强制等于子项合计" />
+          <el-form-item label="套餐总价">
+            <el-input :model-value="computedPackagePrice" readonly placeholder="由非赠送子项自动汇总" />
           </el-form-item>
           <el-form-item label="有效期类型">
             <el-input-number v-model="form.validType" :precision="0" style="width: 100%" />
@@ -642,8 +724,14 @@ watch(hasViewPermission, () => {
                 :value="p.id"
               />
             </el-select>
-            <el-input v-model="line.price" placeholder="单价" style="width: 100px" />
-            <el-input-number v-model="line.amount" :min="1" :precision="0" />
+            <el-input
+              v-model="line.price"
+              placeholder="子项价格"
+              style="width: 100px"
+              :disabled="line.largess"
+            />
+            <el-input-number v-model="line.amount" :min="1" :precision="0" controls-position="right" />
+            <span class="tip-inline">次数</span>
             <el-checkbox v-model="line.largess">赠送</el-checkbox>
             <el-button link type="danger" @click="form.projects.splice(index, 1)">删</el-button>
           </div>
@@ -659,8 +747,14 @@ watch(hasViewPermission, () => {
                 :value="p.id"
               />
             </el-select>
-            <el-input v-model="line.price" placeholder="单价" style="width: 100px" />
-            <el-input-number v-model="line.amount" :min="1" :precision="0" />
+            <el-input
+              v-model="line.price"
+              placeholder="子项价格"
+              style="width: 100px"
+              :disabled="line.largess"
+            />
+            <el-input-number v-model="line.amount" :min="1" :precision="0" controls-position="right" />
+            <span class="tip-inline">次数</span>
             <el-checkbox v-model="line.largess">赠送</el-checkbox>
             <el-button link type="danger" @click="form.products.splice(index, 1)">删</el-button>
           </div>
@@ -676,8 +770,14 @@ watch(hasViewPermission, () => {
                 :value="p.id"
               />
             </el-select>
-            <el-input v-model="line.price" placeholder="单价" style="width: 100px" />
-            <el-input-number v-model="line.amount" :min="1" :precision="0" />
+            <el-input
+              v-model="line.price"
+              placeholder="子项价格"
+              style="width: 100px"
+              :disabled="line.largess"
+            />
+            <el-input-number v-model="line.amount" :min="1" :precision="0" controls-position="right" />
+            <span class="tip-inline">次数</span>
             <el-checkbox v-model="line.largess">赠送</el-checkbox>
             <el-button link type="danger" @click="form.generalCards.splice(index, 1)">删</el-button>
           </div>
@@ -693,8 +793,14 @@ watch(hasViewPermission, () => {
                 :value="p.id"
               />
             </el-select>
-            <el-input v-model="line.price" placeholder="单价" style="width: 100px" />
-            <el-input-number v-model="line.amount" :min="1" :precision="0" />
+            <el-input
+              v-model="line.price"
+              placeholder="子项价格"
+              style="width: 100px"
+              :disabled="line.largess"
+            />
+            <el-input-number v-model="line.amount" :min="1" :precision="0" controls-position="right" />
+            <span class="tip-inline">次数</span>
             <el-checkbox v-model="line.largess">赠送</el-checkbox>
             <el-button link type="danger" @click="form.timeCards.splice(index, 1)">删</el-button>
           </div>
@@ -710,8 +816,14 @@ watch(hasViewPermission, () => {
                 :value="p.id"
               />
             </el-select>
-            <el-input v-model="line.price" placeholder="单价" style="width: 100px" />
-            <el-input-number v-model="line.amount" :min="1" :precision="0" />
+            <el-input
+              v-model="line.price"
+              placeholder="子项价格"
+              style="width: 100px"
+              :disabled="line.largess"
+            />
+            <el-input-number v-model="line.amount" :min="1" :precision="0" controls-position="right" />
+            <span class="tip-inline">次数</span>
             <el-checkbox v-model="line.largess">赠送</el-checkbox>
             <el-button link type="danger" @click="form.savingCards.splice(index, 1)">删</el-button>
           </div>
@@ -794,6 +906,11 @@ watch(hasViewPermission, () => {
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+}
+.tip-inline {
+  font-size: 12px;
+  color: #909399;
+  white-space: nowrap;
 }
 .add-line {
   margin-bottom: 12px;

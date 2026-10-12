@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onActivated, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -156,6 +156,7 @@ const form = reactive({
   remark: '',
   allowSaleDeduct: true,
   allowConsumeDeduct: true,
+  allowPayForCardPurchase: false,
   goodsRange: false,
   largessGoodsRange: false,
   projectLines: [] as RangeLineForm[],
@@ -239,12 +240,11 @@ async function loadScopes(id: number): Promise<void> {
   consumeScopeMode.value = consumeIds.length === 0 ? 'all' : 'specified'
 }
 
-function openCreate(): void {
+async function openCreate(): Promise<void> {
   formMode.value = 'create'
   editingId.value = null
   form.name = ''
   inactiveCategoryOption.value = null
-  form.categoryId = categoryOptions.value[0]?.id ?? null
   form.price = ''
   form.largessPrice = '0'
   form.validType = 0
@@ -255,6 +255,7 @@ function openCreate(): void {
   form.remark = ''
   form.allowSaleDeduct = true
   form.allowConsumeDeduct = true
+  form.allowPayForCardPurchase = false
   form.goodsRange = false
   form.largessGoodsRange = false
   form.projectLines = []
@@ -262,6 +263,8 @@ function openCreate(): void {
   formError.value = null
   resetScope()
   formVisible.value = true
+  await loadCategoryOptions()
+  form.categoryId = categoryOptions.value[0]?.id ?? null
   void loadOptions()
 }
 
@@ -299,6 +302,7 @@ async function openEdit(row: SavingCardItem): Promise<void> {
     form.remark = detail.remark ?? ''
     form.allowSaleDeduct = detail.allowSaleDeduct !== false
     form.allowConsumeDeduct = detail.allowConsumeDeduct !== false
+    form.allowPayForCardPurchase = detail.allowPayForCardPurchase === true
     form.goodsRange = detail.goodsRange === true
     form.largessGoodsRange = detail.largessGoodsRange === true
     form.projectLines = (detail.projects ?? []).map((p) => ({
@@ -403,6 +407,7 @@ async function handleSubmit(): Promise<void> {
     remark: form.remark.trim() || null,
     allowSaleDeduct: form.allowSaleDeduct,
     allowConsumeDeduct: form.allowConsumeDeduct,
+    allowPayForCardPurchase: form.allowPayForCardPurchase,
     goodsRange: form.goodsRange,
     largessGoodsRange: form.largessGoodsRange,
     projects: ranges.projects,
@@ -472,6 +477,10 @@ watch(hasViewPermission, () => {
   void loadCategoryOptions()
   void loadList()
 }, { immediate: true })
+
+onActivated(() => {
+  void loadCategoryOptions()
+})
 </script>
 
 <template>
@@ -626,6 +635,12 @@ watch(hasViewPermission, () => {
           <el-form-item label="允许销售">
             <el-switch v-model="form.allowSell" />
           </el-form-item>
+          <el-form-item label="允许余额购买其他卡项">
+            <div>
+              <el-switch v-model="form.allowPayForCardPurchase" :disabled="!hasEditPermission" />
+              <p class="field-tip">默认关闭。开启后可用本金/赠金抵扣购买次卡、时效卡、套餐、储值卡；不影响项目消耗规则。</p>
+            </div>
+          </el-form-item>
           <el-form-item label="本金商品范围">
             <el-switch v-model="form.goodsRange" active-text="限定" inactive-text="不限定" />
           </el-form-item>
@@ -758,5 +773,11 @@ watch(hasViewPermission, () => {
 }
 .add-line {
   margin-bottom: 12px;
+}
+.field-tip {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #909399;
 }
 </style>
