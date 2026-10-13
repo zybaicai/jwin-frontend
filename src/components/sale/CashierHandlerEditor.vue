@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { fetchHandlerCandidates } from '@/api/handler'
 import type { HandlerCandidateEmployee } from '@/types/handler'
@@ -29,6 +29,26 @@ const loading = ref(false)
 const candidates = ref<HandlerCandidateEmployee[]>([])
 const keyword = ref('')
 const draft = ref<HandlerDraftRow[]>([])
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearKeywordTimer(): void {
+  if (keywordTimer != null) {
+    clearTimeout(keywordTimer)
+    keywordTimer = null
+  }
+}
+
+function onKeywordInput(): void {
+  clearKeywordTimer()
+  keywordTimer = setTimeout(() => {
+    void loadCandidates()
+  }, 300)
+}
+
+function flushKeywordSearch(): void {
+  clearKeywordTimer()
+  void loadCandidates()
+}
 
 const ratioSum = computed(() => {
   let sum = 0
@@ -92,11 +112,14 @@ function openPicker(): void {
   if (props.disabled) {
     return
   }
+  clearKeywordTimer()
   draft.value = model.value.map((r) => ({ ...r }))
   keyword.value = ''
   dialogVisible.value = true
   void loadCandidates()
 }
+
+onBeforeUnmount(() => clearKeywordTimer())
 
 function toggleCandidate(emp: HandlerCandidateEmployee): void {
   const id = emp.employeeId?.trim()
@@ -234,10 +257,12 @@ defineExpose({ ratioValid, ratioSum, openPicker, reload: loadCandidates })
           v-model="keyword"
           clearable
           size="small"
-          placeholder="搜索姓名 / 工号"
-          @keyup.enter="loadCandidates"
+          placeholder="搜索姓名 / 工号，自动搜索"
+          @input="onKeywordInput"
+          @clear="flushKeywordSearch"
+          @keyup.enter="flushKeywordSearch"
         />
-        <el-button size="small" :loading="loading" @click="loadCandidates">查询</el-button>
+        <el-button size="small" :loading="loading" @click="flushKeywordSearch">查询</el-button>
       </div>
       <div v-loading="loading" class="candidate-grid">
         <button

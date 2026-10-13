@@ -243,20 +243,29 @@ watch(
         <h1>项目分类</h1>
         <p class="subtitle">最多两级；停用后不可作为新项目分类选项</p>
       </div>
-      <el-button
-        v-permission="ProjectPermission.CATEGORY_EDIT"
-        type="primary"
-        @click="openCreateRoot"
-      >
-        新增一级分类
-      </el-button>
     </header>
 
-    <form class="toolbar" @submit.prevent="loadTree">
-      <el-checkbox v-model="onlyActiveFilter">仅显示启用</el-checkbox>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-      <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="loadTree">
+        <el-form-item label="状态">
+          <el-checkbox v-model="onlyActiveFilter">仅显示启用</el-checkbox>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+          <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="ProjectPermission.CATEGORY_EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreateRoot"
+        >
+          新增一级分类
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="table-panel">
       <AppError
@@ -436,11 +445,29 @@ watch(
   color: #909399;
 }
 
-.toolbar {
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.filter-toolbar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .table-panel {

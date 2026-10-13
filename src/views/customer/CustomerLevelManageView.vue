@@ -333,35 +333,46 @@ watch(
         <h1>会员等级</h1>
         <p class="subtitle">维护等级名称、金额门槛与排序；当月累计耗卡达到门槛后自动匹配</p>
       </div>
-      <el-button
-        v-permission="CustomerPermission.LEVEL_EDIT"
-        type="primary"
-        @click="openCreate"
-      >
-        新增等级
-      </el-button>
     </header>
 
-    <form class="toolbar" @submit.prevent="handleSearch">
-      <el-input
-        v-model="keywordInput"
-        clearable
-        placeholder="等级名称"
-        style="max-width: 220px"
-      />
-      <el-select
-        v-model="activeFilter"
-        clearable
-        placeholder="状态"
-        style="width: 140px"
-      >
-        <el-option label="全部" value="" />
-        <el-option label="启用" value="true" />
-        <el-option label="停用" value="false" />
-      </el-select>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-      <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
+        <el-form-item label="名称">
+          <el-input
+            v-model="keywordInput"
+            clearable
+            placeholder="等级名称"
+            style="max-width: 220px"
+          />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select
+            v-model="activeFilter"
+            clearable
+            placeholder="状态"
+            style="width: 140px"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="启用" value="true" />
+            <el-option label="停用" value="false" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+          <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="CustomerPermission.LEVEL_EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreate"
+        >
+          新增等级
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="table-panel">
       <AppError
@@ -570,11 +581,29 @@ watch(
   color: #909399;
 }
 
-.toolbar {
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.filter-toolbar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .table-panel {

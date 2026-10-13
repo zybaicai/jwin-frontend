@@ -14,6 +14,10 @@ import SalesCashierView from '@/views/sale/SalesCashierView.vue'
 import SaleOrderListView from '@/views/sale/SaleOrderListView.vue'
 import SaleOrderDetailView from '@/views/sale/SaleOrderDetailView.vue'
 import TreatOrderListView from '@/views/sale/TreatOrderListView.vue'
+import PostponeBillListView from '@/views/assetops/PostponeBillListView.vue'
+import TransferBillListView from '@/views/assetops/TransferBillListView.vue'
+import RefundBillListView from '@/views/refund/RefundBillListView.vue'
+import RefundConfigView from '@/views/refund/RefundConfigView.vue'
 import ProjectCategoryManageView from '@/views/goods/ProjectCategoryManageView.vue'
 import CardCategoryManageView from '@/views/goods/CardCategoryManageView.vue'
 import ProjectManageView from '@/views/goods/ProjectManageView.vue'
@@ -39,6 +43,8 @@ declare module 'vue-router' {
      * 新建/查看/编辑等弹层页面不要设为 true。
      */
     workspaceTab?: boolean
+    /** 延期页：apply=申请列表，approve=审批列表；退款页：list/pending/done */
+    mode?: 'apply' | 'approve' | 'list' | 'pending' | 'done'
   }
 }
 
@@ -173,6 +179,107 @@ const router = createRouter({
             requiresAuth: true,
             title: '消耗订单',
             keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'asset-ops/postpone-apply',
+          name: 'postpone-apply',
+          component: PostponeBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '延期申请',
+            mode: 'apply',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'asset-ops/postpone-approve',
+          name: 'postpone-approve',
+          component: PostponeBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '延期审批',
+            mode: 'approve',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          // 兼容旧菜单/书签
+          path: 'asset-ops/postpone-bills',
+          redirect: { name: 'postpone-apply' },
+        },
+        {
+          path: 'asset-ops/transfer-bills',
+          name: 'transfer-bills',
+          component: TransferBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '权益转账',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'refunds',
+          name: 'refund-list',
+          component: RefundBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '退款订单列表',
+            mode: 'list',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'refunds/pending',
+          name: 'refund-pending',
+          component: RefundBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '退款待审批',
+            mode: 'pending',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'refunds/done',
+          name: 'refund-done',
+          component: RefundBillListView,
+          meta: {
+            requiresAuth: true,
+            title: '退款已完成',
+            mode: 'done',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'refunds/config',
+          name: 'refund-config',
+          component: RefundConfigView,
+          meta: {
+            requiresAuth: true,
+            title: '退款配置',
+            keepAlive: false,
             breadcrumb: true,
             tabClosable: true,
             workspaceTab: true,

@@ -438,7 +438,7 @@ onUnmounted(() => {
     <section class="query-panel">
       <div class="query-toolbar">
         <el-form :inline="true" class="query-form" @submit.prevent>
-          <el-form-item label="关键字">
+          <el-form-item label="客户信息">
             <el-input
               v-model="queryForm.keyword"
               clearable

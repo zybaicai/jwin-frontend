@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
+import TreatRefundPreviewDialog from '@/components/refund/TreatRefundPreviewDialog.vue'
 import TreatOrderDetailContent from '@/components/sale/TreatOrderDetailContent.vue'
 import TreatOrderHandlersDialog from '@/components/sale/TreatOrderHandlersDialog.vue'
 import { cancelTreatOrder, fetchTreatOrderDetail } from '@/api/treat'
@@ -12,6 +13,7 @@ import {
   TreatPermission,
   type TreatOrderDetail,
 } from '@/types/treat'
+import { RefundPermission } from '@/types/refund'
 import { usePermissionStore } from '@/stores/permission'
 import {
   formatDateTime,
@@ -44,9 +46,11 @@ const actionLoading = ref(false)
 const loadError = ref<string | null>(null)
 const detail = ref<TreatOrderDetail | null>(null)
 const handlersVisible = ref(false)
+const refundVisible = ref(false)
 const activeTab = ref('detail')
 
 const canCancel = computed(() => permissionStore.hasPermission(TreatPermission.ORDER_CANCEL))
+const canRefund = computed(() => permissionStore.hasPermission(RefundPermission.ORDER_CREATE))
 const canEditHandler = computed(() =>
   permissionStore.hasPermission(TreatPermission.ORDER_EDIT_HANDLER),
 )
@@ -54,19 +58,29 @@ const canEditHandler = computed(() =>
 const statusLabel = computed(() => formatTreatBillStatus(detail.value?.billStatus))
 const isCancelled = computed(() => statusLabel.value === '已取消')
 const isCompleted = computed(() => statusLabel.value === '已完成')
+const isRefundApplying = computed(() => statusLabel.value === '退款申请中')
+const isRefunded = computed(() => statusLabel.value === '已退款')
 
 const showCancel = computed(() => {
   if (!canCancel.value || !detail.value) {
     return false
   }
-  return !isCancelled.value
+  return isCompleted.value
+})
+
+/** R2：仅已完成可申请整单消耗退款 */
+const showApplyRefund = computed(() => {
+  if (!canRefund.value || !detail.value) {
+    return false
+  }
+  return isCompleted.value
 })
 
 const showEditHandler = computed(() => {
   if (!canEditHandler.value || !detail.value) {
     return false
   }
-  return !isCancelled.value
+  return isCompleted.value && !isRefundApplying.value && !isRefunded.value && !isCancelled.value
 })
 
 const signatures = computed(() => detail.value?.signatures ?? [])
@@ -76,6 +90,7 @@ function resetState(): void {
   detail.value = null
   loadError.value = null
   handlersVisible.value = false
+  refundVisible.value = false
   activeTab.value = 'detail'
 }
 
@@ -118,6 +133,15 @@ async function onCancelOrder(): Promise<void> {
       uiMessage.error(getUserFriendlyErrorMessage(error))
     }
   })
+}
+
+function onApplyRefund(): void {
+  refundVisible.value = true
+}
+
+function onRefundSuccess(): void {
+  void loadDetail()
+  emit('changed')
 }
 
 function onOpenHandlers(): void {
@@ -215,6 +239,16 @@ watch(visible, (open) => {
             @click="onCancelOrder"
           >
             取消订单
+          </el-button>
+          <el-button
+            v-if="showApplyRefund"
+            size="small"
+            type="warning"
+            plain
+            :disabled="loading || actionLoading"
+            @click="onApplyRefund"
+          >
+            申请退款
           </el-button>
           <el-button
             v-if="showEditHandler"
@@ -319,6 +353,11 @@ watch(visible, (open) => {
       v-model="handlersVisible"
       :detail="detail"
       @saved="onHandlersSaved"
+    />
+    <TreatRefundPreviewDialog
+      v-model="refundVisible"
+      :order-id="detail?.id ?? props.orderId"
+      @success="onRefundSuccess"
     />
   </el-dialog>
 </template>

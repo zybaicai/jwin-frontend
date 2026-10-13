@@ -392,58 +392,73 @@ watch(
         <h1>产品管理</h1>
         <p class="subtitle">维护产品主数据（TE+TB）；无「允许消耗」字段</p>
       </div>
-      <el-button
-        v-permission="ProductPermission.EDIT"
-        type="primary"
-        @click="openCreate"
-      >
-        新增产品
-      </el-button>
     </header>
 
-    <form class="toolbar" @submit.prevent="handleSearch">
-      <el-input
-        v-model="keywordInput"
-        clearable
-        placeholder="产品名称/别名"
-        style="max-width: 200px"
-      />
-      <el-select
-        v-model="categoryFilter"
-        clearable
-        filterable
-        placeholder="分类"
-        style="width: 160px"
-      >
-        <el-option
-          v-for="opt in categoryOptions"
-          :key="opt.id"
-          :label="opt.name || String(opt.id)"
-          :value="opt.id"
-        />
-      </el-select>
-      <el-select
-        v-model="brandFilter"
-        clearable
-        filterable
-        placeholder="品牌"
-        style="width: 160px"
-      >
-        <el-option
-          v-for="opt in brandOptions"
-          :key="opt.id"
-          :label="opt.name || String(opt.id)"
-          :value="opt.id"
-        />
-      </el-select>
-      <el-select v-model="activeFilter" clearable placeholder="状态" style="width: 120px">
-        <el-option label="全部" value="" />
-        <el-option label="启用" value="true" />
-        <el-option label="停用" value="false" />
-      </el-select>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-      <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
+        <el-form-item label="名称">
+          <el-input
+            v-model="keywordInput"
+            clearable
+            placeholder="产品名称/别名"
+            style="max-width: 200px"
+          />
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select
+            v-model="categoryFilter"
+            clearable
+            filterable
+            placeholder="分类"
+            style="width: 160px"
+          >
+            <el-option
+              v-for="opt in categoryOptions"
+              :key="opt.id"
+              :label="opt.name || String(opt.id)"
+              :value="opt.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="品牌">
+          <el-select
+            v-model="brandFilter"
+            clearable
+            filterable
+            placeholder="品牌"
+            style="width: 160px"
+          >
+            <el-option
+              v-for="opt in brandOptions"
+              :key="opt.id"
+              :label="opt.name || String(opt.id)"
+              :value="opt.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="activeFilter" clearable placeholder="状态" style="width: 120px">
+            <el-option label="全部" value="" />
+            <el-option label="启用" value="true" />
+            <el-option label="停用" value="false" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+          <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="ProductPermission.EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreate"
+        >
+          新增产品
+        </el-button>
+      </div>
+    </div>
 
     <AppError v-if="optionsError" :description="optionsError" @retry="loadOptions" />
 
@@ -676,11 +691,29 @@ watch(
   color: #909399;
 }
 
-.toolbar {
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.filter-toolbar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .table-panel {

@@ -58,6 +58,19 @@ const IconSales = menuIcon('IconSales', () => [
   h('circle', { cx: '18', cy: '17', r: '2' }),
 ])
 
+const IconAssetOps = menuIcon('IconAssetOps', () => [
+  h('path', { d: 'M12 3 V14' }),
+  h('path', { d: 'M8 10 L12 14 L16 10' }),
+  h('path', { d: 'M5 18 H19' }),
+  h('path', { d: 'M7 21 H17' }),
+])
+
+const IconRefund = menuIcon('IconRefund', () => [
+  h('path', { d: 'M4 12 H18' }),
+  h('path', { d: 'M8 8 L4 12 L8 16' }),
+  h('path', { d: 'M20 7 V17' }),
+])
+
 const IconGoods = menuIcon('IconGoods', () => [
   h('path', { d: 'M4 7 L12 3 L20 7 L12 11 Z' }),
   h('path', { d: 'M4 7 V17 L12 21 L20 17 V7' }),
@@ -201,6 +214,62 @@ export const appMenu: AppMenuItem[] = [
         name: 'treat-orders',
         title: '消耗订单',
         permission: 'treat:order:view',
+      },
+    ],
+  },
+  {
+    name: 'group-asset-ops',
+    title: '延期转账',
+    icon: IconAssetOps,
+    children: [
+      {
+        path: '/asset-ops/postpone-apply',
+        name: 'postpone-apply',
+        title: '延期申请',
+        permission: 'postpone:order:view',
+      },
+      {
+        path: '/asset-ops/postpone-approve',
+        name: 'postpone-approve',
+        title: '延期审批',
+        permission: 'postpone:order:approve',
+      },
+      {
+        path: '/asset-ops/transfer-bills',
+        name: 'transfer-bills',
+        title: '权益转账',
+        permission: 'transfer:order:view',
+      },
+    ],
+  },
+  {
+    name: 'group-refunds',
+    title: '退款管理',
+    icon: IconRefund,
+    children: [
+      {
+        path: '/refunds',
+        name: 'refund-list',
+        title: '退款订单列表',
+        permission: 'refund:order:view',
+      },
+      {
+        path: '/refunds/pending',
+        name: 'refund-pending',
+        title: '待审批',
+        permission: 'refund:order:approve',
+      },
+      {
+        path: '/refunds/done',
+        name: 'refund-done',
+        title: '已完成',
+        permission: 'refund:order:view',
+      },
+      {
+        path: '/refunds/config',
+        name: 'refund-config',
+        title: '退款配置',
+        permission: 'refund:order:approve',
       },
     ],
   },

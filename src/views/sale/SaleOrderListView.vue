@@ -248,7 +248,7 @@ watch(
   <div class="page">
     <div class="filter-bar">
       <el-form :inline="true" class="filter-form" @submit.prevent="onSearch">
-        <el-form-item label="关键字">
+        <el-form-item label="客户信息">
           <el-input
             v-model="queryForm.keyword"
             clearable

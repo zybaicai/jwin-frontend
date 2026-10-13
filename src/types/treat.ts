@@ -190,9 +190,10 @@ export interface TreatOrderPageQuery {
 }
 
 export const TREAT_ORDER_STATUS_OPTIONS = [
-  { label: '待结账', value: '待结账' },
-  { label: '已完成', value: '已完成' },
-  { label: '已取消', value: '已取消' },
+  { label: '已完成', value: '1' },
+  { label: '退款申请中', value: '3' },
+  { label: '已退款', value: '2' },
+  { label: '已取消', value: '9' },
 ] as const
 
 export const TREAT_ORDER_TYPE_OPTIONS = [
@@ -200,13 +201,16 @@ export const TREAT_ORDER_TYPE_OPTIONS = [
   { label: '退消耗单', value: '退消耗' },
 ] as const
 
-/** 展示用：后端 BillStatus 为短码（1/9/2）或历史中文 */
+/** 展示用：后端 BillStatus 为短码（1/3/2/9）或历史中文 */
 export function formatTreatBillStatus(status: string | null | undefined): string {
   if (status == null || status === '') {
     return '—'
   }
   if (status === '1' || status === '已完成') {
     return '已完成'
+  }
+  if (status === '3' || status === '退款申请中') {
+    return '退款申请中'
   }
   if (status === '9' || status === '已取消') {
     return '已取消'

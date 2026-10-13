@@ -1033,7 +1033,11 @@ defineExpose({
           </el-table-column>
           <el-table-column prop="billStatus" label="状态" min-width="90">
             <template #default="{ row }">
-              {{ row.billStatus || '—' }}
+              {{
+                ({ '0': '申请中', '2': '已完成', '9': '已拒绝', '8': '已冲销' } as Record<string, string>)[
+                  String(row.billStatus ?? '')
+                ] || row.billStatus || '—'
+              }}
             </template>
           </el-table-column>
           <el-table-column label="申请时间" min-width="160">

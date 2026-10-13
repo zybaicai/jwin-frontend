@@ -310,48 +310,59 @@ watch(
         <h1>储值区域折扣</h1>
         <p class="subtitle">价格区域 × 项目 × 折扣率；同区域同项目有效期禁止重叠</p>
       </div>
-      <el-button
-        v-permission="CardPermission.SAVING_DISCOUNT_EDIT"
-        type="primary"
-        @click="openCreate"
-      >
-        新增折扣
-      </el-button>
     </header>
 
     <AppError v-if="optionsError" :description="optionsError" @retry="loadOptions" />
 
-    <form class="toolbar" @submit.prevent="loadList">
-      <el-select
-        v-model="filterPriceAreaId"
-        clearable
-        filterable
-        placeholder="价格区域"
-        style="width: 180px"
-      >
-        <el-option
-          v-for="a in priceAreas"
-          :key="a.id"
-          :label="a.name || String(a.id)"
-          :value="a.id"
-        />
-      </el-select>
-      <el-select
-        v-model="filterProjectId"
-        clearable
-        filterable
-        placeholder="项目"
-        style="width: 200px"
-      >
-        <el-option
-          v-for="p in projectOptions"
-          :key="p.id"
-          :label="p.name || String(p.id)"
-          :value="p.id"
-        />
-      </el-select>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="loadList">
+        <el-form-item label="价格区域">
+          <el-select
+            v-model="filterPriceAreaId"
+            clearable
+            filterable
+            placeholder="价格区域"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="a in priceAreas"
+              :key="a.id"
+              :label="a.name || String(a.id)"
+              :value="a.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="项目">
+          <el-select
+            v-model="filterProjectId"
+            clearable
+            filterable
+            placeholder="项目"
+            style="width: 200px"
+          >
+            <el-option
+              v-for="p in projectOptions"
+              :key="p.id"
+              :label="p.name || String(p.id)"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="CardPermission.SAVING_DISCOUNT_EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreate"
+        >
+          新增折扣
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="table-panel">
       <AppError v-if="listError && !loading" :description="listError" @retry="loadList" />
@@ -533,12 +544,31 @@ watch(
   font-size: 13px;
   color: #909399;
 }
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
 }
+
+.filter-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .table-panel {
   min-height: 240px;
   padding: 16px;

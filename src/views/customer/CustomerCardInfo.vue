@@ -3,8 +3,12 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
+import PostponeApplyDialog from '@/components/customer/PostponeApplyDialog.vue'
+import TransferApplyDialog from '@/components/customer/TransferApplyDialog.vue'
 import { fetchCustomerCards } from '@/api/customer'
 import type { CustomerCardItem, CustomerCardItemType } from '@/types/customer'
+import { PostponePermission, TransferPermission } from '@/types/asset-ops'
+import { usePermissionStore } from '@/stores/permission'
 import { getUserFriendlyErrorMessage, runExclusive } from '@/utils/ui'
 import {
   formatCardBalance,
@@ -16,7 +20,70 @@ defineOptions({ name: 'CustomerCardInfo' })
 
 const props = defineProps<{
   customerId: number
+  customerName?: string | null
 }>()
+
+const permissionStore = usePermissionStore()
+const canPostpone = computed(() =>
+  permissionStore.hasPermission(PostponePermission.ORDER_CREATE),
+)
+const canTransfer = computed(() =>
+  permissionStore.hasPermission(TransferPermission.ORDER_CREATE),
+)
+const postponeVisible = ref(false)
+const postponeAccount = ref<CustomerCardItem | null>(null)
+const postponeAccountType = ref<CustomerCardItemType | null>(null)
+const transferVisible = ref(false)
+const transferAccount = ref<CustomerCardItem | null>(null)
+const transferAccountType = ref<CustomerCardItemType | null>(null)
+
+const POSTPONE_TYPES = new Set<CustomerCardItemType>([
+  'GENERAL_CARD',
+  'TIME_CARD',
+  'SAVING_CARD',
+  'PACKAGE_CARD',
+  'PROJECT',
+])
+
+const TRANSFER_TYPES = new Set<CustomerCardItemType>([
+  'GENERAL_CARD',
+  'TIME_CARD',
+  'SAVING_CARD',
+  'PACKAGE_CARD',
+  'PROJECT',
+])
+
+function canPostponeRow(type: CustomerCardItemType): boolean {
+  return canPostpone.value && POSTPONE_TYPES.has(type)
+}
+
+function canTransferRow(type: CustomerCardItemType): boolean {
+  return canTransfer.value && TRANSFER_TYPES.has(type)
+}
+
+const showOpsColumn = computed(
+  () => canPostponeRow(activeType.value) || canTransferRow(activeType.value),
+)
+
+function openPostpone(row: CustomerCardItem): void {
+  postponeAccount.value = row
+  postponeAccountType.value = activeType.value
+  postponeVisible.value = true
+}
+
+function openTransfer(row: CustomerCardItem): void {
+  transferAccount.value = row
+  transferAccountType.value = activeType.value
+  transferVisible.value = true
+}
+
+function isOpsDisabled(row: CustomerCardItem): boolean {
+  return (
+    row.displayStatus === 'POSTPONE_PENDING' ||
+    row.displayStatus === 'TRANSFER_PENDING' ||
+    row.displayStatus === 'REFUNDED'
+  )
+}
 
 /** Prompt / 原系统顺序：产品 → 储值卡 → 套餐卡 → 时效卡 → 通用次卡 → 项目 */
 const CARD_TABS: Array<{ type: CustomerCardItemType; label: string; emptyTitle: string }> = [
@@ -243,6 +310,74 @@ defineExpose({
               {{ row.source || '—' }}
             </template>
           </el-table-column>
+          <el-table-column label="赠送" width="70" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.largess === true" size="small" type="warning">赠送</el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" min-width="110">
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.displayStatus === 'POSTPONE_PENDING'"
+                size="small"
+                type="warning"
+              >
+                {{ row.displayStatusName || '延期申请中' }}
+              </el-tag>
+              <el-tag
+                v-else-if="row.displayStatus === 'TRANSFER_PENDING'"
+                size="small"
+                type="warning"
+              >
+                {{ row.displayStatusName || '转账冻结中' }}
+              </el-tag>
+              <el-tag
+                v-else-if="row.displayStatus === 'EXPIRED'"
+                size="small"
+                type="info"
+              >
+                {{ row.displayStatusName || '已过期' }}
+              </el-tag>
+              <el-tag
+                v-else-if="row.displayStatus === 'REFUNDED'"
+                size="small"
+                type="danger"
+              >
+                {{ row.displayStatusName || '已退款' }}
+              </el-tag>
+              <span v-else>{{ row.displayStatusName || '正常' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-if="showOpsColumn"
+            label="操作"
+            :width="canPostponeRow(activeType) && canTransferRow(activeType) ? 168 : 100"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <el-button
+                v-if="canPostponeRow(activeType)"
+                v-permission="PostponePermission.ORDER_CREATE"
+                link
+                type="primary"
+                :disabled="isOpsDisabled(row as CustomerCardItem)"
+                @click="openPostpone(row as CustomerCardItem)"
+              >
+                申请延期
+              </el-button>
+              <el-button
+                v-if="canTransferRow(activeType)"
+                v-permission="TransferPermission.ORDER_CREATE"
+                link
+                type="primary"
+                :disabled="isOpsDisabled(row as CustomerCardItem)"
+                @click="openTransfer(row as CustomerCardItem)"
+              >
+                权益转账
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
 
         <AppEmpty
@@ -264,6 +399,23 @@ defineExpose({
         </div>
       </template>
     </div>
+
+    <PostponeApplyDialog
+      v-model="postponeVisible"
+      :customer-id="customerId"
+      :customer-name="customerName"
+      :account="postponeAccount"
+      :account-type="postponeAccountType"
+      @success="reloadCurrent"
+    />
+    <TransferApplyDialog
+      v-model="transferVisible"
+      :customer-id="customerId"
+      :customer-name="customerName"
+      :account="transferAccount"
+      :account-type="transferAccountType"
+      @success="reloadCurrent"
+    />
   </div>
 </template>
 

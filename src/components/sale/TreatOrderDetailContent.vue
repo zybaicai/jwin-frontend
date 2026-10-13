@@ -1,14 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import {
   formatTreatBillStatus,
   formatTreatBillType,
+  TreatItemType,
   type TreatOrderDetail,
+  type TreatOrderItem,
 } from '@/types/treat'
 import { formatDateTime, formatMoney, maskMobile } from '@/views/customer/customer-format'
 
 defineOptions({ name: 'TreatOrderDetailContent' })
 
-defineProps<{
+const props = defineProps<{
   detail: TreatOrderDetail
 }>()
 
@@ -31,6 +35,44 @@ function itemTitle(row: {
     return `${name}（${row.itemCode}）`
   }
   return name
+}
+
+/** 按明细类型汇总「结算方式」只读口径（当前无独立现金流水时，现金视为 0） */
+const settlementSummary = computed(() => {
+  const items = props.detail.items ?? []
+  let equity = 0
+  let saving = 0
+  for (const item of items) {
+    const amt = Number(item.totalAmount ?? 0)
+    if (!Number.isFinite(amt)) {
+      continue
+    }
+    if (item.itemType === TreatItemType.SAVING_CARD) {
+      saving += amt
+    } else {
+      // PROJECT / GENERAL_CARD / TIME_CARD：权益抵扣（次数/项目余额）
+      equity += amt
+    }
+  }
+  return {
+    equity,
+    saving,
+    cash: 0,
+  }
+})
+
+function settlementLabel(item: TreatOrderItem): string {
+  if (item.itemType === TreatItemType.SAVING_CARD) {
+    return '储值支付'
+  }
+  if (
+    item.itemType === TreatItemType.PROJECT ||
+    item.itemType === TreatItemType.GENERAL_CARD ||
+    item.itemType === TreatItemType.TIME_CARD
+  ) {
+    return '权益抵扣'
+  }
+  return '—'
 }
 </script>
 
@@ -102,6 +144,11 @@ function itemTitle(row: {
             {{ formatMoney(row.preferentialAmount) }}
           </template>
         </el-table-column>
+        <el-table-column label="结算方式" min-width="100">
+          <template #default="{ row }">
+            {{ settlementLabel(row) }}
+          </template>
+        </el-table-column>
         <el-table-column label="小计" min-width="100" align="right">
           <template #default="{ row }">
             {{ formatMoney(row.totalAmount) }}
@@ -111,15 +158,29 @@ function itemTitle(row: {
     </section>
 
     <section class="section">
-      <h3 class="section-title">支付/消耗金额汇总</h3>
+      <h3 class="section-title">消耗金额与结算方式</h3>
+      <p class="hint">
+        「消耗金额」为本次消耗对应的权益价值，不等于本次现金收款。销售时已付款的套餐/项目再次消耗时，现金支付通常为 0。
+      </p>
       <dl class="field-grid">
         <div class="field-row">
-          <dt>现金金额</dt>
+          <dt>消耗金额</dt>
           <dd>{{ formatMoney(detail.amount) }}</dd>
         </div>
         <div class="field-row">
-          <dt>合计消耗金额</dt>
-          <dd>{{ formatMoney(detail.amount) }}</dd>
+          <dt>权益抵扣</dt>
+          <dd>{{ formatMoney(settlementSummary.equity) }}</dd>
+        </div>
+        <div class="field-row">
+          <dt>储值支付</dt>
+          <dd>{{ formatMoney(settlementSummary.saving) }}</dd>
+        </div>
+        <div class="field-row">
+          <dt>现金支付</dt>
+          <dd>
+            {{ formatMoney(settlementSummary.cash) }}
+            <span class="muted">（当前无独立现金流水，只读占位）</span>
+          </dd>
         </div>
       </dl>
     </section>
@@ -197,5 +258,12 @@ function itemTitle(row: {
 .muted {
   color: #909399;
   font-size: 12px;
+}
+
+.hint {
+  margin: 0 0 8px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

@@ -490,29 +490,44 @@ onActivated(() => {
         <h1>储值卡</h1>
         <p class="subtitle">本金/赠金分列；销售与消耗适用门店及本金/赠金商品范围由商品管理员维护</p>
       </div>
-      <el-button v-permission="CardPermission.SAVING_EDIT" type="primary" @click="openCreate">
-        新增储值卡
-      </el-button>
     </header>
 
-    <form class="toolbar" @submit.prevent="loadList">
-      <el-checkbox v-model="onlySellable">仅可售</el-checkbox>
-      <el-select
-        v-model="categoryFilter"
-        clearable
-        filterable
-        placeholder="分类筛选"
-        style="width: 180px"
-      >
-        <el-option
-          v-for="opt in categoryOptions"
-          :key="opt.id"
-          :label="opt.name || String(opt.id)"
-          :value="opt.id"
-        />
-      </el-select>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="loadList">
+        <el-form-item label="可售">
+          <el-checkbox v-model="onlySellable">仅可售</el-checkbox>
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select
+            v-model="categoryFilter"
+            clearable
+            filterable
+            placeholder="分类筛选"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="opt in categoryOptions"
+              :key="opt.id"
+              :label="opt.name || String(opt.id)"
+              :value="opt.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="CardPermission.SAVING_EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreate"
+        >
+          新增储值卡
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="table-panel">
       <AppError v-if="listError && !loading" :description="listError" @retry="loadList" />
@@ -751,12 +766,31 @@ onActivated(() => {
   font-size: 13px;
   color: #909399;
 }
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
 }
+
+.filter-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .table-panel {
   min-height: 240px;
   padding: 16px;

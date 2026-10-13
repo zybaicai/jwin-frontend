@@ -5,12 +5,10 @@ import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
 import SaleOrderDetailContent from '@/components/sale/SaleOrderDetailContent.vue'
 import SaleOrderHandlersDialog from '@/components/sale/SaleOrderHandlersDialog.vue'
-import { closeSaleOrder, createSaleRefund, fetchSaleOrderDetail } from '@/api/sale'
-import {
-  RefundPermission,
-  SalePermission,
-  type SaleOrderDetail,
-} from '@/types/sale'
+import SaleRefundPreviewDialog from '@/components/refund/SaleRefundPreviewDialog.vue'
+import { closeSaleOrder, fetchSaleOrderDetail } from '@/api/sale'
+import { SalePermission, type SaleOrderDetail } from '@/types/sale'
+import { RefundPermission } from '@/types/refund'
 import { usePermissionStore } from '@/stores/permission'
 import {
   getUserFriendlyErrorMessage,
@@ -38,6 +36,7 @@ const actionLoading = ref(false)
 const loadError = ref<string | null>(null)
 const detail = ref<SaleOrderDetail | null>(null)
 const handlersVisible = ref(false)
+const refundPreviewVisible = ref(false)
 
 const canClose = computed(() => permissionStore.hasPermission(SalePermission.ORDER_CLOSE))
 const canRefund = computed(() => permissionStore.hasPermission(RefundPermission.ORDER_CREATE))
@@ -47,27 +46,33 @@ const canEditHandler = computed(() =>
 
 const status = computed(() => detail.value?.billStatus ?? '')
 const unpaid = computed(() => status.value === '草稿' || status.value === '待支付')
-const paid = computed(() => status.value === '已支付')
-const showCancel = computed(() => {
-  if (unpaid.value) {
-    return canClose.value
-  }
-  if (paid.value) {
-    return canRefund.value
-  }
-  return false
-})
+const refundableStatus = computed(
+  () =>
+    status.value === '已支付' ||
+    status.value === '已完成' ||
+    status.value === '部分退款',
+)
+/** 未支付：取消订单（关单） */
+const showCancel = computed(() => unpaid.value && canClose.value)
+/** 已支付/部分退款：申请退款（预览勾选） */
+const showApplyRefund = computed(() => refundableStatus.value && canRefund.value)
 const showEditHandler = computed(() => {
   if (!canEditHandler.value || !detail.value) {
     return false
   }
-  return status.value !== '已关闭' && status.value !== '已退款'
+  return (
+    status.value !== '已关闭' &&
+    status.value !== '已取消' &&
+    status.value !== '已退款' &&
+    status.value !== '退款申请中'
+  )
 })
 
 function resetState(): void {
   detail.value = null
   loadError.value = null
   handlersVisible.value = false
+  refundPreviewVisible.value = false
 }
 
 async function loadDetail(): Promise<void> {
@@ -89,18 +94,12 @@ async function loadDetail(): Promise<void> {
 
 async function onCancelOrder(): Promise<void> {
   const order = detail.value
-  if (!order?.id) {
-    return
-  }
-  if (paid.value && order.hasConsumedAssets) {
-    uiMessage.warning('卡项已产生消耗，无法取消')
+  if (!order?.id || !unpaid.value) {
     return
   }
   const ok = await uiConfirm({
     title: '取消订单',
-    message: unpaid.value
-      ? '确认取消该未支付订单？取消后订单将关闭。'
-      : '确认取消该已支付订单？将提交销售退款申请（需审批后执行入账冲回）。',
+    message: '确认取消该未支付订单？取消后订单将关闭。',
     confirmText: '确认取消',
   })
   if (!ok) {
@@ -108,26 +107,25 @@ async function onCancelOrder(): Promise<void> {
   }
   await runExclusive(actionLoading, async () => {
     try {
-      if (unpaid.value) {
-        detail.value = await closeSaleOrder(order.id)
-        uiMessage.success('订单已取消（关闭）')
-      } else {
-        // 再次以服务端详情为准，避免列表缓存导致误提交退款
-        const latest = await fetchSaleOrderDetail(order.id)
-        if (latest.hasConsumedAssets) {
-          detail.value = latest
-          uiMessage.warning('卡项已产生消耗，无法取消')
-          return
-        }
-        await createSaleRefund({ sourceOrderId: order.id, reason: '取消订单' })
-        detail.value = await fetchSaleOrderDetail(order.id)
-        uiMessage.success('已提交退款申请，请在退款审批通过后执行')
-      }
+      detail.value = await closeSaleOrder(order.id)
+      uiMessage.success('订单已取消（关闭）')
       emit('changed')
     } catch (error) {
       uiMessage.error(getUserFriendlyErrorMessage(error))
     }
   })
+}
+
+function onApplyRefund(): void {
+  if (!detail.value?.id || !refundableStatus.value) {
+    return
+  }
+  refundPreviewVisible.value = true
+}
+
+async function onRefundSubmitted(): Promise<void> {
+  await loadDetail()
+  emit('changed')
 }
 
 function onOpenHandlers(): void {
@@ -175,6 +173,17 @@ watch(visible, (open) => {
             取消订单
           </el-button>
           <el-button
+            v-if="showApplyRefund"
+            size="small"
+            type="warning"
+            plain
+            :loading="actionLoading"
+            :disabled="loading"
+            @click="onApplyRefund"
+          >
+            申请退款
+          </el-button>
+          <el-button
             v-if="showEditHandler"
             size="small"
             :disabled="loading || actionLoading"
@@ -200,6 +209,12 @@ watch(visible, (open) => {
       v-model="handlersVisible"
       :detail="detail"
       @saved="onHandlersSaved"
+    />
+
+    <SaleRefundPreviewDialog
+      v-model="refundPreviewVisible"
+      :order-id="detail?.id ?? orderId"
+      @success="onRefundSubmitted"
     />
   </el-dialog>
 </template>

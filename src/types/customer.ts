@@ -103,6 +103,15 @@ export type CustomerCardItemType =
   | 'GENERAL_CARD'
   | 'PROJECT'
 
+/** 权益展示状态（延期/转账运营统一口径预留） */
+export type CustomerCardDisplayStatus =
+  | 'NORMAL'
+  | 'POSTPONE_PENDING'
+  | 'TRANSFER_PENDING'
+  | 'EXPIRED'
+  | 'REFUNDED'
+  | string
+
 /** 对齐 CustomerCardItemVo */
 export interface CustomerCardItem {
   accountId: number
@@ -121,6 +130,12 @@ export interface CustomerCardItem {
   /** 剩余有效金额折算（不含赠送） */
   balanceAmount: number | string | null
   source: string | null
+  /** 是否赠送权益 */
+  largess: boolean | null
+  /** NORMAL / POSTPONE_PENDING / EXPIRED / REFUNDED */
+  displayStatus: CustomerCardDisplayStatus | null
+  /** 正常 / 延期申请中 / 已过期 / 已退款 */
+  displayStatusName: string | null
 }
 
 export interface CustomerCardQuery {

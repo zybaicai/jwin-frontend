@@ -184,14 +184,20 @@ const selectorVisible = ref(false)
 
 const customerKeyword = ref('')
 const customerSearching = ref(false)
+const customerSearchLoadingMore = ref(false)
 const customerSearchResults = ref<CustomerListItem[]>([])
 const customerDropdownVisible = ref(false)
+const customerSearchPage = ref(1)
+const customerSearchHasMore = ref(false)
+const CUSTOMER_SEARCH_PAGE_SIZE = 10
 let customerSearchTimer: ReturnType<typeof setTimeout> | null = null
+let customerSearchSeq = 0
 const detailDrawerVisible = ref(false)
 
 const goodsLoading = ref(false)
 const goodsError = ref<string | null>(null)
 const goodsKeyword = ref('')
+let goodsSearchTimer: ReturnType<typeof setTimeout> | null = null
 const goodsItemType = ref('')
 const goodsList = ref<GoodsItem[]>([])
 const channelOptions = ref<SaleChannelOption[]>([])
@@ -545,13 +551,17 @@ const l2Categories = computed(() => {
   return root?.children ?? []
 })
 
-const catalogItems = computed(() => {
-  let list = filteredGoods.value
-  const kw = goodsKeyword.value.trim().toLowerCase()
-  if (kw) {
-    list = list.filter((g) => (g.name || '').toLowerCase().includes(kw))
+/** 关键字已走服务端检索；此处仅做分类/类型过滤后的结果 */
+const catalogItems = computed(() => filteredGoods.value)
+
+const catalogEmptyHint = computed(() => {
+  if (!goodsItemType.value && !goodsKeyword.value.trim()) {
+    return '请选择商品类型，或输入关键字搜索'
   }
-  return list
+  if (goodsItemType.value === 'PROJECT' && saleChannelId.value == null) {
+    return '请先选择销售渠道'
+  }
+  return '请调整分类、渠道或关键字'
 })
 
 const catalogTotal = computed(() => catalogItems.value.length)
@@ -778,30 +788,62 @@ function retryLoadCustomer(): void {
   }
 }
 
-async function searchCustomers(): Promise<void> {
+async function searchCustomers(reset = true): Promise<void> {
   if (!hasCustomerList.value) {
     return
   }
   const kw = customerKeyword.value.trim()
   if (!kw) {
     customerSearchResults.value = []
+    customerSearchPage.value = 1
+    customerSearchHasMore.value = false
     customerDropdownVisible.value = false
     return
   }
-  await runExclusive(customerSearching, async () => {
-    try {
-      const data = await fetchCustomerPage({
-        keyword: kw,
-        page: 1,
-        size: 12,
-      })
-      customerSearchResults.value = data.records ?? []
-      customerDropdownVisible.value = true
-    } catch (error) {
-      customerSearchResults.value = []
-      uiMessage.error(getUserFriendlyErrorMessage(error))
+  if (!reset && (customerSearching.value || customerSearchLoadingMore.value || !customerSearchHasMore.value)) {
+    return
+  }
+  const nextPage = reset ? 1 : customerSearchPage.value + 1
+  const seq = ++customerSearchSeq
+  if (reset) {
+    customerSearching.value = true
+  } else {
+    customerSearchLoadingMore.value = true
+  }
+  try {
+    const data = await fetchCustomerPage({
+      keyword: kw,
+      page: nextPage,
+      size: CUSTOMER_SEARCH_PAGE_SIZE,
+    })
+    if (seq !== customerSearchSeq) return
+    const chunk = data.records ?? []
+    const total = data.total ?? 0
+    if (reset) {
+      customerSearchResults.value = chunk
+      customerSearchPage.value = 1
+    } else {
+      customerSearchResults.value = [...customerSearchResults.value, ...chunk]
+      customerSearchPage.value = nextPage
     }
-  })
+    customerSearchHasMore.value =
+      total > 0
+        ? customerSearchResults.value.length < total
+        : chunk.length >= CUSTOMER_SEARCH_PAGE_SIZE
+    customerDropdownVisible.value = true
+  } catch (error) {
+    if (seq !== customerSearchSeq) return
+    if (reset) {
+      customerSearchResults.value = []
+      customerSearchHasMore.value = false
+    }
+    uiMessage.error(getUserFriendlyErrorMessage(error))
+  } finally {
+    if (seq === customerSearchSeq) {
+      customerSearching.value = false
+      customerSearchLoadingMore.value = false
+    }
+  }
 }
 
 function onCustomerKeywordInput(): void {
@@ -809,7 +851,26 @@ function onCustomerKeywordInput(): void {
     clearTimeout(customerSearchTimer)
   }
   customerSearchTimer = setTimeout(() => {
-    void searchCustomers()
+    void searchCustomers(true)
+  }, 300)
+}
+
+function onCustomerDropdownScroll(e: Event): void {
+  const el = e.target as HTMLElement | null
+  if (!el) return
+  const remain = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (remain <= 36) {
+    void searchCustomers(false)
+  }
+}
+
+function onGoodsKeywordInput(): void {
+  if (goodsSearchTimer != null) {
+    clearTimeout(goodsSearchTimer)
+  }
+  goodsSearchTimer = setTimeout(() => {
+    catalogPage.value = 1
+    void loadGoods()
   }, 300)
 }
 
@@ -950,8 +1011,15 @@ async function loadGoods(): Promise<void> {
     return
   }
   const itemType = goodsItemType.value || undefined
+  const keyword = goodsKeyword.value.trim() || undefined
   // 仅项目必须先选渠道再拉目录价；其它类型不传 saleChannelId
   if (itemType === 'PROJECT' && saleChannelId.value == null) {
+    goodsList.value = []
+    goodsError.value = null
+    return
+  }
+  // 「全部」且无关键字：不拉全量目录，避免一次打爆接口
+  if (!itemType && !keyword) {
     goodsList.value = []
     goodsError.value = null
     return
@@ -959,9 +1027,8 @@ async function loadGoods(): Promise<void> {
   await runExclusive(goodsLoading, async () => {
     goodsError.value = null
     try {
-      const keyword = goodsKeyword.value.trim() || undefined
       if (!itemType) {
-        // 「全部」：项目若已选渠道则带渠道价，其它类型不带渠道
+        // 「全部」+关键字：按类型并发，但带 keyword 缩小结果
         const othersPromise = Promise.all(
           ['PRODUCT', 'GENERAL_CARD', 'TIME_CARD', 'SAVING_CARD', 'PACKAGE_CARD'].map((t) =>
             fetchGoodsList({ itemType: t, keyword }),
@@ -2016,6 +2083,9 @@ onBeforeUnmount(() => {
   if (customerSearchTimer != null) {
     clearTimeout(customerSearchTimer)
   }
+  if (goodsSearchTimer != null) {
+    clearTimeout(goodsSearchTimer)
+  }
 })
 
 void loadChannels()
@@ -2076,8 +2146,13 @@ void tryRestoreOrderFromQuery()
               @input="onCustomerKeywordInput"
               @focus="onCustomerInputFocus"
               @blur="onCustomerBlur"
+              @clear="searchCustomers(true)"
             />
-            <div v-if="customerDropdownVisible" class="customer-dropdown">
+            <div
+              v-if="customerDropdownVisible"
+              class="customer-dropdown"
+              @scroll.passive="onCustomerDropdownScroll"
+            >
               <div
                 v-for="item in customerSearchResults"
                 :key="item.id"
@@ -2087,6 +2162,13 @@ void tryRestoreOrderFromQuery()
                 <strong>{{ item.name?.trim() || '未命名' }}</strong>
                 <span>{{ maskMobile(item.mobile) }}</span>
                 <span>{{ item.code || '—' }}</span>
+              </div>
+              <div v-if="customerSearchLoadingMore" class="customer-empty">加载中…</div>
+              <div
+                v-else-if="customerSearchHasMore && customerSearchResults.length"
+                class="customer-empty"
+              >
+                下拉加载更多
               </div>
               <div v-if="!customerSearching && !customerSearchResults.length" class="customer-empty">
                 无匹配客户
@@ -2125,7 +2207,10 @@ void tryRestoreOrderFromQuery()
                 v-model="goodsKeyword"
                 clearable
                 size="small"
-                placeholder="筛选当前列表名称"
+                placeholder="输入名称关键字，自动搜索（防抖）"
+                @input="onGoodsKeywordInput"
+                @clear="onGoodsKeywordInput"
+                @keyup.enter="catalogPage = 1; loadGoods()"
               />
             </div>
             <AppError v-if="goodsError" :description="goodsError" @retry="loadGoods" />
@@ -2222,7 +2307,7 @@ void tryRestoreOrderFromQuery()
                 <AppEmpty
                   v-if="!pagedCatalogItems.length"
                   title="暂无商品"
-                  description="请调整分类或渠道"
+                  :description="catalogEmptyHint"
                 />
                 <div v-if="catalogTotal > 0" class="catalog-pager">
                   <span>共 {{ catalogTotal }} 条</span>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { fetchSavingCardDetail } from '@/api/card'
 import { fetchProjectCategoryTree, fetchProjectPage } from '@/api/project'
@@ -41,6 +41,17 @@ const keyword = ref('')
 const fundSource = ref<FundSource>('principal')
 const selectedRootId = ref<number | null>(null)
 const selectedCategoryId = ref<number | null>(null)
+const projectPage = ref(1)
+const projectPageSize = 20
+const projectTotal = ref(0)
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearKeywordTimer(): void {
+  if (keywordTimer != null) {
+    clearTimeout(keywordTimer)
+    keywordTimer = null
+  }
+}
 
 const title = computed(() => {
   const name = props.asset?.name || '储值卡'
@@ -122,13 +133,14 @@ async function loadProjects(): Promise<void> {
   const card = cardDetail.value
   if (!card) {
     projects.value = []
+    projectTotal.value = 0
     return
   }
   const allowed = allowedProjectIds(card, fundSource.value)
   try {
     const page = await fetchProjectPage({
-      page: 1,
-      size: 200,
+      page: projectPage.value,
+      size: projectPageSize,
       keyword: keyword.value.trim() || undefined,
       categoryId: selectedCategoryId.value ?? selectedRootId.value ?? undefined,
       consumable: true,
@@ -141,8 +153,10 @@ async function loadProjects(): Promise<void> {
       records = records.filter((p) => set.has(p.id))
     }
     projects.value = records.filter((p) => p.allowConsume !== false)
+    projectTotal.value = page.total ?? records.length
   } catch (error) {
     projects.value = []
+    projectTotal.value = 0
     uiMessage.error(getUserFriendlyErrorMessage(error))
   }
 }
@@ -150,15 +164,32 @@ async function loadProjects(): Promise<void> {
 function selectRoot(id: number | null): void {
   selectedRootId.value = id
   selectedCategoryId.value = null
+  projectPage.value = 1
   void loadProjects()
 }
 
 function selectChild(id: number | null): void {
   selectedCategoryId.value = id
+  projectPage.value = 1
   void loadProjects()
 }
 
 function handleSearch(): void {
+  clearKeywordTimer()
+  projectPage.value = 1
+  void loadProjects()
+}
+
+function onKeywordInput(): void {
+  clearKeywordTimer()
+  keywordTimer = setTimeout(() => {
+    projectPage.value = 1
+    void loadProjects()
+  }, 300)
+}
+
+function onProjectPageChange(next: number): void {
+  projectPage.value = next
   void loadProjects()
 }
 
@@ -186,20 +217,26 @@ function handleSelect(row: unknown): void {
 
 watch(visible, (open) => {
   if (!open) {
+    clearKeywordTimer()
     return
   }
+  clearKeywordTimer()
   keyword.value = ''
   fundSource.value = 'principal'
   selectedRootId.value = null
   selectedCategoryId.value = null
+  projectPage.value = 1
   void loadDialogData()
 })
 
 watch(fundSource, () => {
   if (visible.value) {
+    projectPage.value = 1
     void loadProjects()
   }
 })
+
+onBeforeUnmount(() => clearKeywordTimer())
 </script>
 
 <template>
@@ -217,8 +254,9 @@ watch(fundSource, () => {
         <el-input
           v-model="keyword"
           clearable
-          placeholder="项目名称 / 别名 / 关键字"
+          placeholder="项目名称 / 别名 / 关键字，自动搜索"
           style="max-width: 280px"
+          @input="onKeywordInput"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         />
@@ -310,6 +348,17 @@ watch(fundSource, () => {
               </template>
             </el-table-column>
           </el-table>
+          <div v-if="projectTotal > 0" class="project-pager">
+            <el-pagination
+              background
+              small
+              layout="total, prev, pager, next"
+              :total="projectTotal"
+              :current-page="projectPage"
+              :page-size="projectPageSize"
+              @current-change="onProjectPageChange"
+            />
+          </div>
         </div>
       </div>
 
@@ -398,6 +447,12 @@ watch(fundSource, () => {
 
 .list-col {
   padding: 0;
+}
+
+.project-pager {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .footer-meta {

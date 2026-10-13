@@ -195,20 +195,29 @@ watch(hasViewPermission, () => {
         <h1>耗材类别</h1>
         <p class="subtitle">商品管理员配置；列表按后端默认 sequence 升序，不支持 sortField</p>
       </div>
-      <el-button
-        v-permission="ConsumablePermission.EDIT"
-        type="primary"
-        @click="openCreate"
-      >
-        新增类别
-      </el-button>
     </header>
 
-    <form class="toolbar" @submit.prevent="loadList">
-      <el-checkbox v-model="onlyActiveFilter">仅显示启用</el-checkbox>
-      <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-      <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
-    </form>
+    <div class="filter-bar">
+      <div class="filter-toolbar">
+        <el-form :inline="true" class="filter-form" @submit.prevent="loadList">
+        <el-form-item label="状态">
+          <el-checkbox v-model="onlyActiveFilter">仅显示启用</el-checkbox>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+          <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
+        </el-form-item>
+        </el-form>
+        <el-button
+          v-permission="ConsumablePermission.EDIT"
+          class="create-btn"
+          type="primary"
+          @click="openCreate"
+        >
+          新增类别
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="table-panel">
       <AppError v-if="listError && !loading" :description="listError" @retry="loadList" />
@@ -343,11 +352,29 @@ watch(hasViewPermission, () => {
   color: #909399;
 }
 
-.toolbar {
+.filter-bar {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.filter-toolbar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+}
+
+.filter-form {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.create-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .table-panel {

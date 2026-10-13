@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -34,7 +34,17 @@ const searchForm = reactive({
   keyword: '',
 })
 
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearSearchTimer(): void {
+  if (searchTimer != null) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+}
+
 function resetState(): void {
+  clearSearchTimer()
   keyword.value = ''
   searchForm.keyword = ''
   page.value = 1
@@ -73,9 +83,19 @@ async function loadList(): Promise<void> {
 }
 
 function handleSearch(): void {
+  clearSearchTimer()
   keyword.value = searchForm.keyword.trim()
   page.value = 1
   void loadList()
+}
+
+function onKeywordInput(): void {
+  clearSearchTimer()
+  searchTimer = setTimeout(() => {
+    keyword.value = searchForm.keyword.trim()
+    page.value = 1
+    void loadList()
+  }, 300)
 }
 
 function handlePageChange(nextPage: number): void {
@@ -110,6 +130,8 @@ watch(visible, (open) => {
   resetState()
   void loadList()
 })
+
+onBeforeUnmount(() => clearSearchTimer())
 </script>
 
 <template>
@@ -126,8 +148,10 @@ watch(visible, (open) => {
       <el-input
         v-model="searchForm.keyword"
         clearable
-        placeholder="姓名 / 手机号 / 客户编号"
+        placeholder="姓名 / 手机号 / 客户编号，自动搜索"
         style="max-width: 320px"
+        @input="onKeywordInput"
+        @clear="handleSearch"
       />
       <el-button type="primary" native-type="submit" :loading="loading">搜索</el-button>
     </form>

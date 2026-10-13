@@ -3767,7 +3767,49 @@ GET /api/v1/handler-candidates?bizType=PROJECT_TREAT&storeId=&keyword=
 
 # 十九、退款API
 
-> 2026-09-16 退款中心模块（CONF-003/004/020～026）：金额服务端计算；次卡=`UnitPriceSnapshot×剩余次数`；储值只退未耗本金（赠金不退）；审批后执行；与耗卡本月取消互斥。
+> 2026-09-16 退款中心模块（CONF-003/004/020～026）：金额服务端计算；次卡=`UnitPriceSnapshot×剩余次数`；储值只退未耗本金（赠送余额不现金退）；与耗卡本月取消互斥。  
+> **R1（2026-10-13）**：销售退款 preview + 明细勾选（含套餐子权益）+ 多次退 + 特殊退 `refund:special`；审批通过**同事务自动执行**；**禁止** Performance reverse；`execute` 仅补偿。无 DDL（特殊标记/发生月写入 Remark）。  
+> **R2（2026-10-13）**：消耗退款 **仅整单**；preview `refundType=TREAT`；审批通过同事务自动恢复权益（项目/次卡/时效 ValidDate 不变/储值本金+赠送分列）；源消耗状态 `1→3→2`；**禁止** Performance reverse / 库存 / 改历史销售单。无 DDL。  
+> **R3（2026-10-13）**：权益转账后按**当前持有人**退款；一次申请只允许一个 `holderCustomerId`（禁合并 A+B）；金额按原销售 `UnitPriceSnapshot` 比例；转账流水只读不撤销；不改 `SaleBill.CustomerID` / 历史 Treat；不进提成/Ledger。无 DDL。
+
+---
+
+# 190B 退款预览（R1 销售 / R2 消耗 / R3 持有人）
+
+```HTTP
+POST /api/v1/refunds/preview
+```
+
+权限：`refund:order:create`
+
+请求（销售）：
+
+```JSON
+{
+  "refundType": "SALE",
+  "sourceOrderId": "XS202610130001",
+  "specialRefund": false,
+  "holderCustomerId": 9
+}
+```
+
+请求（消耗整单）：
+
+```JSON
+{
+  "refundType": "TREAT",
+  "sourceOrderId": "XH202610130001"
+}
+```
+
+返回要点：
+
+- 公共：`refundType`、原单编号/`customerId`（**原购买客户**，转账不改）/时间（`saleTime`）/金额（`saleAmount`）、`lines[]`
+- **SALE**：`alreadyRefundedAmount`、`specialRefund`；行可勾选（含套餐子权益、`holderCustomerId`/`holderCustomerName`）
+- **SALE / R3**：`holders[]`（各持有人可退汇总，`buyer=true` 为原购买客户）；`transfers[]`（关联 `TB_TransferBill*` 只读流水）；可选 `holderCustomerId` 过滤 `lines`
+- 金额口径：次数类 = `UnitPriceSnapshot × maxRefundableQty`（转入账户继承快照）；储值按持有人本金；赠送默认不现金退
+- **TREAT**：`wholeOrderOnly=true`；行只读（`selectable=false`）；储值行含 `principalAmount`/`bonusAmount`；时效卡行含 `validDate`（恢复时保持）；`consumableHint` 预留库存提示
+- `specialRefund=true`（仅 SALE）须持有 `refund:special`
 
 ---
 
@@ -3777,28 +3819,39 @@ GET /api/v1/handler-candidates?bizType=PROJECT_TREAT&storeId=&keyword=
 POST /api/v1/refunds
 ```
 
-权限：`refund:order:create`
+权限：`refund:order:create`（特殊退另需 `refund:special`）
 
 请求：
 
 ```JSON
 {
   "refundType": "SALE",
-  "sourceOrderId": "S202609160001",
+  "sourceOrderId": "XS202610130001",
   "reason": "客户退款",
-  "payments": [
-    { "method": "现金", "amount": 693.00 }
-  ]
+  "specialRefund": false,
+  "specialReason": null,
+  "holderCustomerId": 9,
+  "items": [
+    { "accountType": "GENERAL_CARD", "accountId": 12, "quantity": 7 }
+  ],
+  "payments": []
 }
 ```
 
 说明：
 
 - `refundType`：`SALE` | `TREAT`
-- **退款金额由服务端按剩余权益计算**，忽略前端定价字段
-- `payments` 可选；缺省按原销售支付比例分摊到可退金额；未知支付方式失败（无 fallback）
-- SALE：覆盖该单下全部仍可退账户（剩次×快照；储值仅本金未耗）
-- TREAT：已取消/已退款消耗单禁止申请
+- **退款金额由服务端按勾选行重算**，忽略前端金额字段；提交时再校验
+- `items` 空：按全部可退剩余（兼容旧行为）；非空：仅退勾选账户（`PROJECT`/`PRODUCT`/`GENERAL_CARD`/`TIME_CARD`/`SAVING_CARD`；套餐请勾**子权益**，禁止只退母户）
+- `payments` 可选；缺省按原销售支付比例分摊；未知支付方式失败
+- SALE 源单状态须为 `已支付`/`已完成`/`部分退款`；可多次退（可退余额>0）；进行中申请（status 0/1）互斥
+- 申请成功后源销售单 → `退款申请中`
+- 特殊退：`specialRefund=true` + `specialReason` 必填；Remark 编码 `[SPECIAL]…`（无 DDL）
+- **TREAT（R2）**：仅整单；`items` 非空直接拒绝；仅源消耗 `BillStatus=1`（已完成）可申请；申请后源单 → `3`（退款申请中）；已取消/`2`/`3` 禁止申请；与本月 cancel 互斥
+- **R3 持有人**：
+  - 多持有人可退时：须指定 `holderCustomerId`，且 `items` 勾选明细不得跨持有人（禁一次合并 A+B）
+  - 空 `items` + 多持有人 + 未指定 `holderCustomerId` → 业务错误拒绝
+  - 退款只扣减**当前持有人**账户；**禁止**撤销转账 / 改 `SaleBill.CustomerID` / 改历史 Treat / 恢复到原购买客户
 
 ---
 
@@ -3809,7 +3862,10 @@ GET /api/v1/refunds?status=0&page=1&size=20
 ```
 
 权限：`refund:order:view`  
-按当前门店；`status` 可选（0/1/2/9）。
+按当前门店。
+
+查询参数（均可选）：`status`、`refundType`（SALE/TREAT）、`keyword`、`refundId`、`sourceOrderId`、`createdFrom`/`createdTo`（ISO）、`page`/`size`。  
+返回含客户名/手机/申请人名、`specialRefund` 等（JOIN 现表，**无新 DDL**）。
 
 ---
 
@@ -3819,11 +3875,12 @@ GET /api/v1/refunds?status=0&page=1&size=20
 GET /api/v1/refunds/{id}
 ```
 
-权限：`refund:order:view`（含门店隔离）
+权限：`refund:order:view`（含门店隔离）  
+详情含：`payments`、`processes`、`items`、`specialRefund`/`specialReason`、`refundOccurMonth`（从执行 Process 备注解析）。
 
 ---
 
-# 193 审批退款
+# 193 审批退款（通过）
 
 ```HTTP
 POST /api/v1/refunds/{id}/approve
@@ -3831,110 +3888,272 @@ POST /api/v1/refunds/{id}/approve
 
 权限：`refund:order:approve`
 
+规则（R1/R2）：必须命中 `TB_ErpApprovalRoleConfig`（`BizType=REFUND`）；未配置/未命中不可批；允许自批。  
+**销售退款**：通过后同事务自动执行（权益减量/关闭账户、写退款渠道、源单→`部分退款`/`已退款`、Process 记 `RefundOccurMonth=yyyy-MM`）；**禁止**调用 Performance reverse。  
+**消耗退款（R2）**：通过后同事务自动执行（恢复项目余额/次卡次数/时效权益且不改 ValidDate/储值本金与赠送分列；源单→`2` 已退款；Process 记 `RefundOccurMonth`）；**禁止** Performance reverse / 库存回滚 / 改 SaleBill.CustomerID。
+
 请求：
 
 ```JSON
 {
-  "approved": true,
   "remark": "同意退款"
 }
 ```
 
-状态：`0` 待审批 → `1` 已审批 / `9` 已驳回。写 Process。
+---
+
+# 193B 拒绝退款
+
+```HTTP
+POST /api/v1/refunds/{id}/reject
+```
+
+权限：`refund:order:approve`（同样须命中 REFUND 审批配置）  
+状态：`0→9`。写 Process。销售源单回退为 `已支付` 或 `部分退款`（视已执行退款合计）。消耗源单若为 `3` 则回退为 `1`（已完成）。
 
 ---
 
-# 194 执行退款
+# 194 执行退款（补偿）
 
 ```HTTP
 POST /api/v1/refunds/{id}/execute
 ```
 
 权限：`refund:order:execute`  
-仅 `ApprovalStatus=1` 可执行；CAS 防重复。
+仅 `ApprovalStatus=1` 可执行；CAS 防重复。  
+**正常路径勿调用**；仅当审批自动执行失败时补偿。
 
-执行：
+执行（SALE / R1 + R3）：
 
-```Plain Text
-SALE：停用剩余账户 → 冲销售业绩 → 源单已退款 → 退款单已执行
-TREAT：加回次数/储值 → 冲耗卡业绩 → 源消耗单已退款 → 退款单已执行
+```PlainText
+按退款明细减量当前持有人账户余额（不删账户；归零则 Active=0）
+→ 空套餐母户停用 → 源单部分退款/已退款
+→ 退款单已执行；记 RefundOccurMonth
+禁止：Performance reverse / Ledger / CommissionFact
+禁止：撤销 TB_TransferBill* / 改 SaleBill.CustomerID / 改历史 Treat / 权益恢复到原购买客户
 ```
 
-具体哪些步骤执行，由退款类型决定。
+执行（TREAT / R2）：
 
-状态码：`0` 待审批 / `1` 已审批 / `2` 已执行 / `9` 已驳回。
+```PlainText
+CAS 退款单 1→2（防重复）
+→ 按原消耗明细恢复：项目 Balance / 次卡次数 / 时效 PerformanceBalance（不改 ValidDate）
+  / 储值 Balance+LargessBalance 分列
+→ 源消耗单 BillStatus=2
+→ Process 记 RefundOccurMonth
+禁止：Performance reverse / 库存 / 改历史销售 / 业绩提成 / 重复恢复
+```
+
+消耗单状态短码：`1` 已完成 / `3` 退款申请中 / `2` 已退款 / `9` 已取消（无部分退款）。
+
+退款单状态码：`0` 待审批 / `1` 已审批（瞬态） / `2` 已执行 / `9` 已驳回。
+
+权限点：`refund:order:view|create|approve|execute` + `refund:special`。  
+退款审批配置：复用 `PUT /api/v1/asset-ops/config` 的 `refundApprovers`（`TB_ErpApprovalRoleConfig`，BizType=REFUND）。
 
 ---
 
-# 二十、卡延期API
+# 二十、权益运营（卡项延期 / 权益转账）
+
+> 正式实现前缀：`/api/v1/asset-ops`  
+> 旧草案 `POST /card-accounts/{id}/extend`、`POST /general-card-accounts/{id}/transfer` **已废弃，勿再对接**。  
+> 核心原则：延期只改有效期；转账不改 SaleBill.CustomerID、不改历史 Treat、不产生销售/业绩/提成。
+
+---
+
+# 201 分页查询延期单
 
 ```HTTP
-POST /api/v1/card-accounts/{id}/extend
+GET /api/v1/asset-ops/postpone-bills
 ```
 
-请求：
+权限：`postpone:order:view`
+
+查询参数：`storeId`、`customerId`、`approvalStatus`、`keyword`、`page`、`size`
+
+状态短码：`0` 申请中 / `1` 已通过 / `9` 已拒绝 / `8` 已撤销（预留）
+
+---
+
+# 202 延期单详情
+
+```HTTP
+GET /api/v1/asset-ops/postpone-bills/{id}
+```
+
+权限：`postpone:order:view`
+
+返回头表 + 明细（原/新有效期、是否永久、权益类型）。
+
+---
+
+# 203 发起延期申请
+
+```HTTP
+POST /api/v1/asset-ops/postpone-bills
+```
+
+权限：`postpone:order:create`
 
 ```JSON
 {
-  "newValidDate": "2030-01-01",
-  "reason": "客户延期"
+  "customerId": 10001,
+  "storeId": 1001,
+  "remark": "过期延期",
+  "items": [
+    {
+      "accountType": "GENERAL_CARD",
+      "accountId": 12,
+      "extensionDays": 30,
+      "newValidDate": null,
+      "everlasting": false
+    }
+  ]
 }
 ```
 
-必须：
-
-```Plain Text
-权限
- ↓
-业务规则
- ↓
-记录原有效期
- ↓
-更新有效期
- ↓
-写延期记录
-```
+说明：申请中**不冻结**余量；审批通过才改账户 `ValidDate`。
 
 ---
 
-# 二十一、次卡转让API
-
----
-
-# 211 发起转让
+# 204 审批延期（通过 / 拒绝）
 
 ```HTTP
-POST /api/v1/general-card-accounts/{id}/transfer
+POST /api/v1/asset-ops/postpone-bills/{id}/approve
+POST /api/v1/asset-ops/postpone-bills/{id}/reject
 ```
 
-请求：
+权限：`postpone:order:approve`
+
+```JSON
+{ "remark": "同意" }
+```
+
+规则：必须命中 `TB_ErpApprovalRoleConfig`（`BizType=POSTPONE`）；未配置/未命中不可批；**允许发起人自批**（只要本人在审批配置内且具备审批权限）。
+
+---
+
+# 205 分页查询转账单
+
+```HTTP
+GET /api/v1/asset-ops/transfer-bills
+```
+
+权限：`transfer:order:view`
+
+查询参数：`storeId`、`outCustomerId`、`inCustomerId`、`billStatus`、`keyword`、`page`、`size`
+
+状态短码：`0` 申请中 / `2` 已完成 / `9` 已拒绝 / `8` 已冲销（预留）
+
+---
+
+# 206 转账单详情
+
+```HTTP
+GET /api/v1/asset-ops/transfer-bills/{id}
+```
+
+权限：`transfer:order:view`
+
+返回头表（转出/转入客户）+ 明细（数量、储值本金/赠金、原销售单、Out/In 账户）。
+
+---
+
+# 207 发起权益转账
+
+```HTTP
+POST /api/v1/asset-ops/transfer-bills
+```
+
+权限：`transfer:order:create`
 
 ```JSON
 {
-  "targetCustomerId": 20001,
-  "reason": "客户转让"
+  "outCustomerId": 10001,
+  "inCustomerId": 10002,
+  "storeId": 1001,
+  "remark": "朋友到店消费",
+  "items": [
+    {
+      "accountType": "GENERAL_CARD",
+      "accountId": 12,
+      "quantity": 3
+    },
+    {
+      "accountType": "SAVING_CARD",
+      "accountId": 8,
+      "savingPrincipalAmount": 300,
+      "savingBonusAmount": 100
+    }
+  ]
 }
 ```
 
-生成：
+规则：
 
-> 转让申请。
-
----
-
-# 212 审核转让
-
-```HTTP
-POST /api/v1/card-transfers/{id}/approve
+```PlainText
+转出客户必须是发起人的主护理客户
+目标客户须在权限门店范围
+禁止整套餐母户（PACKAGE_CARD）；套餐只转子权益
+储值必须拆本金/赠金，禁止合并金额
+申请即写 TB_ErpAssetFreeze；Available = Balance - Frozen
 ```
 
 ---
 
-# 213 执行转让
+# 208 审批转账（通过 / 拒绝）
 
 ```HTTP
-POST /api/v1/card-transfers/{id}/execute
+POST /api/v1/asset-ops/transfer-bills/{id}/approve
+POST /api/v1/asset-ops/transfer-bills/{id}/reject
 ```
+
+权限：`transfer:order:approve`
+
+通过：扣减原账户 → 为目标客户新建账户（继承销售溯源）→ 释放冻结。  
+拒绝：仅解除冻结。  
+审批配置：`BizType=TRANSFER`，规则同延期。
+
+---
+
+# 209 套餐可转子权益
+
+```HTTP
+GET /api/v1/asset-ops/transfer-bills/package-children?packageAccountId=1
+```
+
+权限：`transfer:order:create`
+
+返回套餐母户下可转的项目/次卡/时效/储值子账户列表。
+
+---
+
+# 210 权益运营配置
+
+```HTTP
+GET /api/v1/asset-ops/config?storeId=1001
+PUT /api/v1/asset-ops/config
+```
+
+权限：`asset-ops:config:edit`
+
+```JSON
+{
+  "storeId": 1001,
+  "allowLargessPostpone": false,
+  "allowLargessTransfer": false,
+  "postponeApprovers": [
+    { "roleCode": "STORE_MANAGER", "levelNo": 1 }
+  ],
+  "transferApprovers": [
+    { "roleCode": "EMPLOYEE", "employeeId": "10001", "levelNo": 1 }
+  ]
+}
+```
+
+`roleCode`：`STORE_MANAGER` / `FINANCE` / `EMPLOYEE` / `JOB_TYPE`。
+
+客户详情只读转账记录仍用：`GET /api/v1/customers/{id}/transfers`。
 
 ---
 

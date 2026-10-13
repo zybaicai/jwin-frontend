@@ -119,7 +119,7 @@ export async function updateSaleOrderHandlers(
 }
 
 /**
- * POST /v1/refunds —— 创建销售退款申请（取消已支付且未消耗订单）
+ * POST /v1/refunds —— 创建销售退款申请（已支付销售单）
  * 权限：refund:order:create
  */
 export async function createSaleRefund(body: {
@@ -129,7 +129,7 @@ export async function createSaleRefund(body: {
   const response = await request.post<ApiResponse<{ id: string }>>('/v1/refunds', {
     refundType: 'SALE',
     sourceOrderId: body.sourceOrderId,
-    reason: body.reason ?? '取消订单',
+    reason: body.reason ?? '申请退款',
     payments: [],
   })
   return response.data.data

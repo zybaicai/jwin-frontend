@@ -774,7 +774,11 @@ defineExpose({
 
           <el-tab-pane label="卡项信息" name="cards" lazy>
             <div v-if="visitedTabs.has('cards') && customerId != null" class="tab-pane-body">
-              <CustomerCardInfo ref="cardInfoRef" :customer-id="customerId" />
+              <CustomerCardInfo
+                ref="cardInfoRef"
+                :customer-id="customerId"
+                :customer-name="detail?.name"
+              />
             </div>
           </el-tab-pane>
 

@@ -216,7 +216,7 @@ export const SalePermission = {
   ARREAR_REPAY: 'sale:arrear:repay',
 } as const
 
-/** 退款创建（取消已支付销售单走此权限） */
+/** @deprecated 请使用 @/types/refund 的 RefundPermission */
 export const RefundPermission = {
   ORDER_CREATE: 'refund:order:create',
 } as const
