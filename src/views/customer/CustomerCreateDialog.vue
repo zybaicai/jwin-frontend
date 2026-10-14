@@ -17,8 +17,17 @@ import {
 
 const visible = defineModel<boolean>({ default: false })
 
+const props = withDefaults(
+  defineProps<{
+    /** 打开时预填手机号（预约快登） */
+    defaultMobile?: string | null
+  }>(),
+  { defaultMobile: null },
+)
+
 const emit = defineEmits<{
   success: []
+  created: [customer: { id: number; name: string | null; mobile: string | null }]
 }>()
 
 const saving = ref(false)
@@ -136,7 +145,7 @@ async function handleSubmit(): Promise<void> {
   }
   await runExclusive(saving, async () => {
     try {
-      await createCustomer({
+      const created = await createCustomer({
         name: form.name.trim(),
         mobile: form.mobile.trim(),
         gender: form.gender,
@@ -149,6 +158,11 @@ async function handleSubmit(): Promise<void> {
       })
       uiMessage.success('保存成功')
       visible.value = false
+      emit('created', {
+        id: created.id,
+        name: created.name ?? form.name.trim(),
+        mobile: created.mobile ?? form.mobile.trim(),
+      })
       emit('success')
     } catch (error) {
       notifyError(error)
@@ -166,6 +180,9 @@ watch(visible, (open) => {
     return
   }
   resetForm()
+  if (props.defaultMobile?.trim()) {
+    form.mobile = props.defaultMobile.trim()
+  }
   void loadOptions()
 })
 </script>

@@ -14,6 +14,8 @@ import SalesCashierView from '@/views/sale/SalesCashierView.vue'
 import SaleOrderListView from '@/views/sale/SaleOrderListView.vue'
 import SaleOrderDetailView from '@/views/sale/SaleOrderDetailView.vue'
 import TreatOrderListView from '@/views/sale/TreatOrderListView.vue'
+import AppointmentBoardView from '@/views/appointment/AppointmentBoardView.vue'
+import AppointmentConfigView from '@/views/appointment/AppointmentConfigView.vue'
 import PostponeBillListView from '@/views/assetops/PostponeBillListView.vue'
 import TransferBillListView from '@/views/assetops/TransferBillListView.vue'
 import RefundBillListView from '@/views/refund/RefundBillListView.vue'
@@ -43,6 +45,8 @@ declare module 'vue-router' {
      * 新建/查看/编辑等弹层页面不要设为 true。
      */
     workspaceTab?: boolean
+    /** 页面级权限码（菜单/守卫可读；业务页仍自行校验） */
+    permission?: string
     /** 延期页：apply=申请列表，approve=审批列表；退款页：list/pending/done */
     mode?: 'apply' | 'approve' | 'list' | 'pending' | 'done'
   }
@@ -178,6 +182,50 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             title: '消耗订单',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'appointments/config',
+          name: 'appointment-config',
+          component: AppointmentConfigView,
+          meta: {
+            requiresAuth: true,
+            title: '预约配置',
+            permission: 'appointment:view',
+            defaultTab: 'rules',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'appointments/schedule',
+          name: 'appointment-schedule',
+          component: AppointmentConfigView,
+          meta: {
+            requiresAuth: true,
+            title: '排班管理',
+            permission: 'appointment:view',
+            defaultTab: 'roster',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'appointments',
+          name: 'appointment-board',
+          component: AppointmentBoardView,
+          meta: {
+            requiresAuth: true,
+            title: '预约看板',
+            permission: 'appointment:view',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,

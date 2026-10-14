@@ -101,6 +101,8 @@ export interface CreateTreatOrderRequest {
   billDate?: string | null
   remark?: string | null
   signatureImageUrl?: string | null
+  /** 预约开消耗：绑定预约单并驱动 SERV */
+  appointmentId?: string | null
   items: CreateTreatOrderItem[]
   handlers: CreateTreatOrderHandler[]
 }

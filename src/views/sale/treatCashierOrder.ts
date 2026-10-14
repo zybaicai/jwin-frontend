@@ -119,6 +119,7 @@ export function buildCreateTreatOrderRequest(input: {
   billDate: string | null | undefined
   remark?: string | null
   signatureImageUrl?: string | null
+  appointmentId?: string | null
   lines: ConsumeLineForSubmit[]
   handlers: TreatHandlerForSubmit[]
 }): CreateTreatOrderRequest {
@@ -161,6 +162,9 @@ export function buildCreateTreatOrderRequest(input: {
   }
   if (input.signatureImageUrl) {
     body.signatureImageUrl = input.signatureImageUrl
+  }
+  if (input.appointmentId) {
+    body.appointmentId = input.appointmentId
   }
   return body
 }

@@ -58,6 +58,14 @@ const IconSales = menuIcon('IconSales', () => [
   h('circle', { cx: '18', cy: '17', r: '2' }),
 ])
 
+const IconAppointment = menuIcon('IconAppointment', () => [
+  h('rect', { x: '4', y: '5', width: '16', height: '15', rx: '2' }),
+  h('path', { d: 'M8 3 V7' }),
+  h('path', { d: 'M16 3 V7' }),
+  h('path', { d: 'M4 10 H20' }),
+  h('path', { d: 'M9 14 H15' }),
+])
+
 const IconAssetOps = menuIcon('IconAssetOps', () => [
   h('path', { d: 'M12 3 V14' }),
   h('path', { d: 'M8 10 L12 14 L16 10' }),
@@ -214,6 +222,31 @@ export const appMenu: AppMenuItem[] = [
         name: 'treat-orders',
         title: '消耗订单',
         permission: 'treat:order:view',
+      },
+    ],
+  },
+  {
+    name: 'group-appointments',
+    title: '预约管理',
+    icon: IconAppointment,
+    children: [
+      {
+        path: '/appointments',
+        name: 'appointment-board',
+        title: '预约看板',
+        permission: 'appointment:view',
+      },
+      {
+        path: '/appointments/schedule',
+        name: 'appointment-schedule',
+        title: '排班管理',
+        permission: 'appointment:view',
+      },
+      {
+        path: '/appointments/config',
+        name: 'appointment-config',
+        title: '预约配置',
+        permission: 'appointment:view',
       },
     ],
   },

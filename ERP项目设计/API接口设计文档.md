@@ -3578,9 +3578,20 @@ POST /api/v1/services/{id}/complete
 
 # 十八、预约API
 
-> 2026-09-16 预约中心（CONF-050～055）：排班 + 可约槽 + 预约创建/改/取消 + 状态机 + 看板；顾客必填（经 `GET /customers?keyword=` 选人）；**不**自动转开单；**不**写 OperationLog（过程写 `TB_AppointmentBillProcess`）。
+> 2026-09-16 预约中心（CONF-050～055）；**2026-10-13 P0 修订**：多项目、时长可改、允许护理师时间重叠、到店后手动开消耗预填、乐观锁 Version、消耗单关联 TreatBillID、状态增加 SERV（服务中由消耗绑定驱动）。  
+> 顾客必填（经现有客户查询/快速登记）；**不**自动建消耗单；**不**显示/锁定价格；过程写 `TB_AppointmentBillProcess`（含 FromStatus/ToStatus/Remark）。
 
 权限：`appointment:view` / `appointment:edit` / `appointment:status`
+
+状态码（≤4）：`WAIT` 待确认 / `CONF` 已预约 / `ARRV` 已到店 / `SERV` 服务中 / `DONE` 已完成 / `CANC` 已取消 / `NOSH` 爽约（独立于取消）。
+
+状态流转要点：
+
+- 可编辑 / 可取消：仅 `WAIT|CONF`
+- 可到店：`WAIT|CONF` → `ARRV`（不建单）
+- 可爽约：`WAIT|CONF` → `NOSH`
+- 开消耗预填：仅 `ARRV|SERV`；`POST .../open-treat` **不建单**；真实消耗提交带 `appointmentId` 后 `bindTreat` → `SERV`，消耗完成 → `DONE`
+- `POST .../complete` 仅兼容保留，业务完成应以消耗回调为准
 
 ---
 
@@ -3598,15 +3609,22 @@ POST /api/v1/appointments
 {
   "customerId": 10001,
   "storeId": 1002,
+  "projectIds": [2001, 2002],
   "projectId": 2001,
   "employeeId": "E001",
   "startTime": "2026-08-26T15:00:00",
+  "durationMinutes": 90,
   "appointmentTypeId": 1,
   "remark": "客户预约"
 }
 ```
 
-说明：`customerId` 必填；时长取项目 `TreatTime` 快照（无则配置 Period，再默认 60）；服务端校验排班与冲突。
+说明：
+
+- `customerId` / `storeId` / `employeeId` / `startTime` 必填；一个预约绑定一名护理师，可多项目（`projectIds` 优先，兼容 `projectId`）
+- 默认时长 = 各项目 `TreatTime` 累加（无则 Period/60）；`durationMinutes` 可手工覆盖；保存开始/结束/最终时长
+- **允许**同一护理师时间重叠；无排班时仅校验员工通过 `TK_EmployeeEntity` 具备本店服务资格（不要求主店 ID 永久等于预约门店）
+- 响应含 `version`、`projects[]`（含时长/名称快照）、`status`；**不含价格**
 
 ---
 
@@ -3620,7 +3638,11 @@ GET /api/v1/appointments?storeId=&date=&dateFrom=&dateTo=&status=&employeeId=&cu
 
 ```HTTP
 GET /api/v1/appointments/{id}
+GET /api/v1/appointments/{id}/processes
+GET /api/v1/appointments/employees?storeId=
 ```
+
+详情含 `projects` / `processes` / `version` / `treatBillId`。护理师列表复用组织管理门店任职（主店+跨店）。
 
 ---
 
@@ -3642,7 +3664,7 @@ POST /api/v1/appointments/{id}/arrive
 ```
 
 权限：`appointment:status`  
-状态：`CONF` → `ARRV`（到店后由前端自行调销售/耗卡 API，本模块不建单）
+状态：`WAIT|CONF` → `ARRV`（**不**自动生成消耗单）
 
 ---
 
@@ -3653,7 +3675,8 @@ POST /api/v1/appointments/{id}/no-show
 ```
 
 权限：`appointment:status`  
-状态：`CONF` → `NOSH`
+请求可带 `{ "reason": "..." }`  
+状态：`WAIT|CONF` → `NOSH`（独立终态，≠ 取消）
 
 ---
 
@@ -3665,19 +3688,25 @@ POST /api/v1/appointments/{id}/cancel
 PUT  /api/v1/appointments/{id}
 ```
 
-完成：`ARRV` → `DONE`；取消：`WAIT|CONF` → `CANC`（可带 `reason`）；修改仅 `WAIT|CONF`。
+- 完成：兼容保留；正式路径为消耗回调 `ARRV|SERV` → `DONE`
+- 取消：`WAIT|CONF` → `CANC`（可带 `reason`）；软取消保留记录
+- 修改：仅 `WAIT|CONF`；请求体须带 `version`（乐观锁 CAS）；可改 `projectIds` / `employeeId` / `startTime` / `durationMinutes` / `remark`
 
 ---
 
-# 185B 可约槽 / 当日看板
+# 185B 可约槽 / 当日看板 / 开消耗
 
 ```HTTP
 GET /api/v1/appointments/available-slots?storeId=&date=&projectId=&employeeId=
 GET /api/v1/appointments/board?storeId=&date=
+POST /api/v1/appointments/{id}/open-treat
 ```
 
-权限：`appointment:view`  
-可约槽由排班 − 占用预约计算，半开区间。
+权限：看板/槽 `appointment:view`；开消耗 `appointment:status`
+
+- 可约槽仍按重叠过滤做**推荐**；create/update **不因重叠拒绝**
+- 看板返回当日预约列表 + onDuty
+- `open-treat` 返回预填：`appointmentId/storeId/customerId/employeeId/projectIds/treatBillId/alreadyOpened`；不扣资产、不建单。前端跳转 `/sales/cashier?mode=consume&appointmentId=`；消耗创建命令可带 `appointmentId`，服务端绑定后置 `SERV`
 
 ---
 
@@ -3693,17 +3722,18 @@ GET  /api/v1/appointment-schedules/config?storeId=
 PUT  /api/v1/appointment-schedules/config
 ```
 
-权限：读 `appointment:view`；写 `appointment:edit`
+权限：读 `appointment:view`；写 `appointment:edit`  
+前端「预约管理 → 预约配置」页（班次 / 日排班 / 预约设置）已对接上述读写接口；看板仍只读 config 作时间轴。
 
 ---
 
-# 186 转开单（后置）
+# 186 转开单（废弃）
 
 ```HTTP
 POST /api/v1/appointments/{id}/create-order
 ```
 
-**V1 不实现**（CONF-054）。到店后请调用既有销售/耗卡接口。
+**不实现**。请用 `#185B open-treat` + 现有消耗开单。
 
 ---
 

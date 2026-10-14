@@ -177,6 +177,8 @@ const permissionStore = usePermissionStore()
 const storeStore = useStoreStore()
 
 const mode = ref<WorkbenchMode>('sale')
+/** 预约开消耗：创建消耗单时回传 appointmentId */
+const linkedAppointmentId = ref<string | null>(null)
 const customerLoading = ref(false)
 const customerError = ref<string | null>(null)
 const customer = ref<CustomerDetail | null>(null)
@@ -907,10 +909,46 @@ function switchMode(next: WorkbenchMode): void {
   handlers.value = []
   backdateEnabled.value = false
   billDate.value = formatToday()
+  if (next === 'sale') {
+    linkedAppointmentId.value = null
+  }
   uiMessage.info(`已切换为${next === 'sale' ? '销售单' : '消耗单'}模式`)
   if (next === 'sale') {
     void loadGoods()
   } else if (customerReady.value) {
+    void loadAssets()
+  }
+}
+
+function parseQueryText(raw: unknown): string | null {
+  const text = Array.isArray(raw) ? String(raw[0] ?? '') : String(raw ?? '')
+  const trimmed = text.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+/** 读取 query mode / appointmentId；有 appointmentId 时切消耗并保存关联 */
+function applyAppointmentQueryFromRoute(): void {
+  const appointmentId = parseQueryText(route.query.appointmentId)
+  linkedAppointmentId.value = appointmentId
+
+  const modeRaw = parseQueryText(route.query.mode)
+  const wantConsume = modeRaw === 'consume' || !!appointmentId
+  if (!wantConsume) {
+    return
+  }
+  if (mode.value === 'consume') {
+    return
+  }
+  if (!hasTreatView.value && !hasTreatCreate.value) {
+    uiMessage.warning('暂无消耗单权限（treat:order:view / create）')
+    return
+  }
+  mode.value = 'consume'
+  saleLines.value = []
+  handlers.value = []
+  backdateEnabled.value = false
+  billDate.value = formatToday()
+  if (customerReady.value) {
     void loadAssets()
   }
 }
@@ -1979,6 +2017,7 @@ async function onSubmitConsume(): Promise<void> {
         backdateEnabled: backdateEnabled.value,
         billDate: billDate.value,
         signatureImageUrl,
+        appointmentId: linkedAppointmentId.value,
         lines: linesForSubmit,
         handlers: handlers.value.map((h) => ({
           employeeId: h.employeeId,
@@ -2004,6 +2043,13 @@ async function onSubmitConsume(): Promise<void> {
       currentTreatOrder.value = order
       persistLastTreatOrderId(order.id)
       consumeLines.value = []
+      linkedAppointmentId.value = null
+      if (route.query.appointmentId || route.query.mode === 'consume') {
+        const nextQuery = { ...route.query }
+        delete nextQuery.appointmentId
+        delete nextQuery.mode
+        void router.replace({ query: nextQuery })
+      }
       await refreshTreatResult(order.id)
       uiMessage.success('消耗单已提交，权益已扣减')
     } catch (error) {
@@ -2015,6 +2061,7 @@ async function onSubmitConsume(): Promise<void> {
 function onStartNextTreatOrder(): void {
   consumeLines.value = []
   handlers.value = []
+  linkedAppointmentId.value = null
   currentTreatOrder.value = null
   postTreatAssets.value = null
   treatResultVisible.value = false
@@ -2046,6 +2093,14 @@ watch(
   () => route.query.customerId,
   () => {
     syncCustomerContext()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => [route.query.mode, route.query.appointmentId] as const,
+  () => {
+    applyAppointmentQueryFromRoute()
   },
   { immediate: true },
 )
