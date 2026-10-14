@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RefreshRight } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
 import { useTabsStore } from '@/stores/tabs'
@@ -8,10 +9,21 @@ const router = useRouter()
 const tabsStore = useTabsStore()
 
 async function openTab(path: string): Promise<void> {
-  if (router.currentRoute.value.fullPath === path) {
+  if (router.currentRoute.value.fullPath === path || router.currentRoute.value.path === path) {
     return
   }
   await router.push(path)
+}
+
+async function refreshTab(key: string): Promise<void> {
+  // 非当前页先切过去再刷，避免只刷缓存看不见效果
+  if (tabsStore.activeKey !== key) {
+    const tab = tabsStore.tabs.find((t) => t.key === key)
+    if (tab) {
+      await router.push(tab.path)
+    }
+  }
+  tabsStore.refreshTab(key)
 }
 
 async function closeTab(key: string): Promise<void> {
@@ -20,7 +32,7 @@ async function closeTab(key: string): Promise<void> {
     return
   }
   const nextPath = tabsStore.removeTab(key)
-  if (nextPath != null && router.currentRoute.value.fullPath !== nextPath) {
+  if (nextPath != null && router.currentRoute.value.path !== nextPath) {
     await router.push(nextPath)
   }
 }
@@ -56,6 +68,15 @@ async function closeOtherTabs(): Promise<void> {
         >
           <button type="button" class="tab-title" @click="openTab(tab.path)">
             {{ tab.title }}
+          </button>
+          <button
+            type="button"
+            class="tab-refresh"
+            :aria-label="`刷新${tab.title}`"
+            :title="`刷新${tab.title}`"
+            @click.stop="refreshTab(tab.key)"
+          >
+            <el-icon :size="12"><RefreshRight /></el-icon>
           </button>
           <button
             v-if="tab.closable"
@@ -124,6 +145,7 @@ async function closeOtherTabs(): Promise<void> {
 }
 
 .tab-title,
+.tab-refresh,
 .tab-close,
 .tab-action {
   border: 0;
@@ -136,9 +158,30 @@ async function closeOtherTabs(): Promise<void> {
 .tab-title {
   max-width: 160px;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 6px 0 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tab-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 2px;
+  border-radius: 3px;
+  opacity: 0.55;
+  color: inherit;
+}
+
+.tab-refresh:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.tab.is-active .tab-refresh:hover {
+  background: var(--el-color-primary-light-8);
 }
 
 .tab-close {

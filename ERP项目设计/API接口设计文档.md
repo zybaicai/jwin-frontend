@@ -3621,9 +3621,9 @@ POST /api/v1/appointments
 
 说明：
 
-- `customerId` / `storeId` / `employeeId` / `startTime` 必填；一个预约绑定一名护理师，可多项目（`projectIds` 优先，兼容 `projectId`）
+- `customerId` / `storeId` / `startTime` 必填；`employeeId` **可空**（看板「到店确认」列未分派护理师登记，看板归入最左列）；有护理师时一个预约绑定一名护理师，可多项目（`projectIds` 优先，兼容 `projectId`）
 - 默认时长 = 各项目 `TreatTime` 累加（无则 Period/60）；`durationMinutes` 可手工覆盖；保存开始/结束/最终时长
-- **允许**同一护理师时间重叠；无排班时仅校验员工通过 `TK_EmployeeEntity` 具备本店服务资格（不要求主店 ID 永久等于预约门店）
+- **允许**同一护理师时间重叠；有护理师且无排班时仅校验员工通过 `TK_EmployeeEntity` 具备本店服务资格（不要求主店 ID 永久等于预约门店）；无护理师时跳过排班/并发校验
 - 响应含 `version`、`projects[]`（含时长/名称快照）、`status`；**不含价格**
 
 ---
@@ -3705,8 +3705,8 @@ POST /api/v1/appointments/{id}/open-treat
 权限：看板/槽 `appointment:view`；开消耗 `appointment:status`
 
 - 可约槽仍按重叠过滤做**推荐**；create/update **不因重叠拒绝**
-- 看板返回当日预约列表 + onDuty
-- `open-treat` 返回预填：`appointmentId/storeId/customerId/employeeId/projectIds/treatBillId/alreadyOpened`；不扣资产、不建单。前端跳转 `/sales/cashier?mode=consume&appointmentId=`；消耗创建命令可带 `appointmentId`，服务端绑定后置 `SERV`
+- 看板返回当日预约列表 + onDuty；**默认不含** `CANC`（已取消）/`NOSH`（爽约），避免占格；列表接口仍可查全量
+- `open-treat` 返回预填：`appointmentId/storeId/customerId/employeeId/projectIds/treatBillId/alreadyOpened`；不扣资产、不建单。前端跳转 `/sales/cashier?mode=consume&appointmentId=&customerId=&projectIds=`；消耗台按 customerId 选客，并按 projectIds 匹配可用项目资产预填明细；创建命令可带 `appointmentId`，服务端绑定后置 `SERV`
 
 ---
 
@@ -3723,7 +3723,22 @@ PUT  /api/v1/appointment-schedules/config
 ```
 
 权限：读 `appointment:view`；写 `appointment:edit`  
-前端「预约管理 → 预约配置」页（班次 / 日排班 / 预约设置）已对接上述读写接口；看板仍只读 config 作时间轴。
+前端「预约管理 → 预约配置」页（班次 / 日排班 / 门店规则 / 能力等）已对接上述读写接口；看板仍只读 config 作时间轴。
+
+---
+
+# 185D 预约类型 CRUD
+
+```HTTP
+GET    /api/v1/appointments/types?includeInactive=
+POST   /api/v1/appointments/types
+PUT    /api/v1/appointments/types/{id}
+DELETE /api/v1/appointments/types/{id}
+```
+
+- 读：`appointment:view`（默认仅 Active；`includeInactive=true` 含停用）
+- 写/停用：`appointment:edit`（门店管理员）
+- 请求体：`{ "name", "sequence?", "active?" }`；DELETE 为逻辑停用（Active=false）
 
 ---
 

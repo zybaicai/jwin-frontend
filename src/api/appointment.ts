@@ -317,11 +317,41 @@ export async function openTreatFromAppointment(id: string): Promise<OpenTreatRes
   return response.data.data
 }
 
-export async function fetchAppointmentTypes(): Promise<AppointmentTypeItem[]> {
+export async function fetchAppointmentTypes(
+  includeInactive = false,
+): Promise<AppointmentTypeItem[]> {
   const response = await request.get<ApiResponse<AppointmentTypeItem[]>>(
     '/v1/appointments/types',
+    { params: includeInactive ? { includeInactive: true } : undefined },
   )
   return response.data.data ?? []
+}
+
+export async function createAppointmentType(body: {
+  name: string
+  sequence?: number | null
+  active?: boolean | null
+}): Promise<AppointmentTypeItem> {
+  const response = await request.post<ApiResponse<AppointmentTypeItem>>(
+    '/v1/appointments/types',
+    body,
+  )
+  return response.data.data
+}
+
+export async function updateAppointmentType(
+  id: number,
+  body: { name: string; sequence?: number | null; active?: boolean | null },
+): Promise<AppointmentTypeItem> {
+  const response = await request.put<ApiResponse<AppointmentTypeItem>>(
+    `/v1/appointments/types/${id}`,
+    body,
+  )
+  return response.data.data
+}
+
+export async function deactivateAppointmentType(id: number): Promise<void> {
+  await request.delete(`/v1/appointments/types/${id}`)
 }
 
 export async function fetchAppointmentCapacities(

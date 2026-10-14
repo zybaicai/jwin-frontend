@@ -38,9 +38,17 @@ watch(
   { immediate: true },
 )
 
+/** 与页签 store 的 key 对齐（path，不含 query），保证刷新按钮能踢掉缓存 */
+function tabKeyOf(viewRoute: RouteLocationNormalizedLoaded): string {
+  if (viewRoute.name === 'home' || viewRoute.path === '/') {
+    return '/'
+  }
+  return viewRoute.path
+}
+
 function viewKey(viewRoute: RouteLocationNormalizedLoaded): string {
-  const version = tabsStore.cacheName(viewRoute.fullPath)
-  return `${viewRoute.fullPath}#${version}`
+  const key = tabKeyOf(viewRoute)
+  return `${key}#${tabsStore.cacheName(key)}`
 }
 
 function viewComponent(
@@ -50,7 +58,7 @@ function viewComponent(
   if (component == null || viewRoute.meta.keepAlive !== true) {
     return component
   }
-  return resolveCachedView(component, tabsStore.cacheName(viewRoute.fullPath))
+  return resolveCachedView(component, tabsStore.cacheName(tabKeyOf(viewRoute)))
 }
 </script>
 

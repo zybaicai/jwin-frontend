@@ -237,12 +237,6 @@ export const appMenu: AppMenuItem[] = [
         permission: 'appointment:view',
       },
       {
-        path: '/appointments/schedule',
-        name: 'appointment-schedule',
-        title: '排班管理',
-        permission: 'appointment:view',
-      },
-      {
         path: '/appointments/config',
         name: 'appointment-config',
         title: '预约配置',

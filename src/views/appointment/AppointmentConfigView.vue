@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import AppError from '@/components/common/AppError.vue'
 import {
   assignScheduleDay,
   createAppointmentSchedule,
+  createAppointmentType,
+  deactivateAppointmentType,
   fetchAppointmentCapacities,
   fetchAppointmentConfig,
   fetchAppointmentEmployees,
@@ -17,6 +19,7 @@ import {
   saveAppointmentCapacity,
   saveAppointmentConfig,
   updateAppointmentSchedule,
+  updateAppointmentType,
 } from '@/api/appointment'
 import {
   AppointmentPermission,
@@ -66,6 +69,17 @@ const canEdit = computed(() =>
 const canView = computed(() =>
   permissionStore.hasPermission(AppointmentPermission.VIEW),
 )
+/** 预约类型 / 提醒配置：需 appointment:edit（门店管理员） */
+const canAdminConfig = computed(() => canEdit.value)
+
+const typeDialogVisible = ref(false)
+const typeSaving = ref(false)
+const editingTypeId = ref<number | null>(null)
+const typeForm = reactive({
+  name: '',
+  sequence: 10,
+  active: true,
+})
 
 const storeId = computed(() => storeStore.currentStoreId ?? null)
 
@@ -312,7 +326,69 @@ async function loadCapacities(): Promise<void> {
 }
 
 async function loadTypes(): Promise<void> {
-  typeOptions.value = await fetchAppointmentTypes()
+  typeOptions.value = await fetchAppointmentTypes(canAdminConfig.value)
+}
+
+function openCreateType(): void {
+  editingTypeId.value = null
+  typeForm.name = ''
+  typeForm.sequence = (typeOptions.value[typeOptions.value.length - 1]?.sequence ?? 0) + 10
+  typeForm.active = true
+  typeDialogVisible.value = true
+}
+
+function openEditType(row: AppointmentTypeItem): void {
+  editingTypeId.value = row.id
+  typeForm.name = row.name?.trim() || ''
+  typeForm.sequence = row.sequence ?? 10
+  typeForm.active = row.active !== false
+  typeDialogVisible.value = true
+}
+
+async function submitType(): Promise<void> {
+  const name = typeForm.name.trim()
+  if (!name) {
+    uiMessage.warning('请填写类型名称')
+    return
+  }
+  await runExclusive(typeSaving, async () => {
+    try {
+      if (editingTypeId.value != null) {
+        await updateAppointmentType(editingTypeId.value, {
+          name,
+          sequence: typeForm.sequence,
+          active: typeForm.active,
+        })
+        ElMessage.success('预约类型已更新')
+      } else {
+        await createAppointmentType({
+          name,
+          sequence: typeForm.sequence,
+          active: typeForm.active,
+        })
+        ElMessage.success('预约类型已创建')
+      }
+      typeDialogVisible.value = false
+      await loadTypes()
+    } catch (e) {
+      ElMessage.error(getUserFriendlyErrorMessage(e))
+    }
+  })
+}
+
+async function removeType(row: AppointmentTypeItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`停用类型「${row.name}」？停用后新建预约将不可选。`, '停用确认', {
+      type: 'warning',
+    })
+    await deactivateAppointmentType(row.id)
+    ElMessage.success('已停用')
+    await loadTypes()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(getUserFriendlyErrorMessage(e))
+    }
+  }
 }
 
 async function loadRemindTasks(): Promise<void> {
@@ -450,7 +526,9 @@ onUnmounted(() => {
     <header class="page-header">
       <div>
         <h1>预约配置</h1>
-        <p class="desc">维护本店班次、日排班与预约营业时段；数据按当前登录门店隔离。</p>
+        <p class="desc">
+          维护本店班次、日排班、门店规则与护理师能力；预约类型与提醒由管理员配置。
+        </p>
       </div>
       <el-button :loading="loading" @click="loadAll">刷新</el-button>
     </header>
@@ -667,38 +745,55 @@ onUnmounted(() => {
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="预约类型" name="types">
-          <p class="hint">复用 TB_AppointmentType，本页只读展示（字典维护后续可接入通用字典管理）。</p>
+        <el-tab-pane v-if="canAdminConfig" label="预约类型" name="types">
+          <div class="tab-toolbar">
+            <span class="hint">管理员可增删改预约类型（停用后新建不可选）。</span>
+            <el-button type="primary" @click="openCreateType">新增类型</el-button>
+          </div>
           <el-table :data="typeOptions" stripe border>
             <el-table-column prop="id" label="ID" width="80" />
             <el-table-column prop="name" label="名称" min-width="160" />
             <el-table-column prop="sequence" label="排序" width="80" />
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.active === false ? 'info' : 'success'" size="small">
+                  {{ row.active === false ? '停用' : '启用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="140" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openEditType(row)">编辑</el-button>
+                <el-button
+                  v-if="row.active !== false"
+                  link
+                  type="danger"
+                  @click="removeType(row)"
+                >
+                  停用
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="提醒配置" name="remind">
+        <el-tab-pane v-if="canAdminConfig" label="提醒配置" name="remind">
           <el-form label-width="180px" class="settings-form" style="max-width: 560px">
             <el-form-item label="启用提醒任务">
-              <el-switch v-model="settingsForm.remindEnabled" :disabled="!canEdit" />
+              <el-switch v-model="settingsForm.remindEnabled" />
             </el-form-item>
             <el-form-item label="创建后立即提醒">
-              <el-switch v-model="settingsForm.remindOnCreate" :disabled="!canEdit" />
+              <el-switch v-model="settingsForm.remindOnCreate" />
             </el-form-item>
             <el-form-item label="到店前提前（分钟）">
               <el-input-number
                 v-model="settingsForm.remindLeadMinutes"
                 :min="0"
                 :max="7 * 24 * 60"
-                :disabled="!canEdit"
               />
             </el-form-item>
             <el-form-item>
-              <el-button
-                type="primary"
-                :loading="settingsSaving"
-                :disabled="!canEdit"
-                @click="submitSettings"
-              >
+              <el-button type="primary" :loading="settingsSaving" @click="submitSettings">
                 保存提醒配置
               </el-button>
             </el-form-item>
@@ -720,6 +815,29 @@ onUnmounted(() => {
         </el-tab-pane>
       </el-tabs>
     </div>
+
+    <el-dialog
+      v-model="typeDialogVisible"
+      :title="editingTypeId != null ? '编辑预约类型' : '新增预约类型'"
+      width="420px"
+      destroy-on-close
+    >
+      <el-form label-width="80px">
+        <el-form-item label="名称" required>
+          <el-input v-model="typeForm.name" maxlength="40" placeholder="如：会员预约" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="typeForm.sequence" :min="0" :max="9999" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="typeForm.active" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="typeDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="typeSaving" @click="submitType">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="shiftDialogVisible"

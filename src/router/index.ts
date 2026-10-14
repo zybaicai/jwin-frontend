@@ -196,7 +196,7 @@ const router = createRouter({
             requiresAuth: true,
             title: '预约配置',
             permission: 'appointment:view',
-            defaultTab: 'rules',
+            defaultTab: 'roster',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,
@@ -205,18 +205,7 @@ const router = createRouter({
         },
         {
           path: 'appointments/schedule',
-          name: 'appointment-schedule',
-          component: AppointmentConfigView,
-          meta: {
-            requiresAuth: true,
-            title: '排班管理',
-            permission: 'appointment:view',
-            defaultTab: 'roster',
-            keepAlive: true,
-            breadcrumb: true,
-            tabClosable: true,
-            workspaceTab: true,
-          },
+          redirect: '/appointments/config',
         },
         {
           path: 'appointments',

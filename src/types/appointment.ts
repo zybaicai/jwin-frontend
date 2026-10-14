@@ -233,7 +233,8 @@ export interface CreateAppointmentRequest {
   /** 兼容旧版单项目；与 projectIds 二选一，优先 projectIds */
   projectId?: number | null
   projectIds?: number[]
-  employeeId: string
+  /** 可空：到店确认列未分派护理师 */
+  employeeId?: string | null
   /** LocalDateTime，如 2026-09-25T10:00:00 */
   startTime: string
   durationMinutes?: number | null
