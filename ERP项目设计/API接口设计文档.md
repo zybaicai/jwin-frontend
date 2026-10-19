@@ -3217,12 +3217,15 @@ POST /api/v1/sales/orders
 
 权限：`sale:order:create`（补单业务日另需 `sale:order:backdate`）
 
+> **Batch-1（2026-10-14）幂等**：可选 `idempotencyKey`（客户端 UUID）。相同键+相同业务指纹重放返回首单；相同键不同参数拒绝；超时重试须复用原键。落库表 `TB_ErpIdempotencyRecord`（Scope=`SALE_CREATE`）。支付入账另有单据状态 CAS（仅 `待支付`/`草稿` 可 `updateBillPaid`）。
+
 请求：
 
 ```JSON
 {
   "customerId": 10001,
   "storeId": 1001,
+  "idempotencyKey": "8f1c2a6e-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "saleChannelId": 11,
   "billDate": "2026-09-10",
   "arrearAmount": 500.00,
@@ -3338,10 +3341,13 @@ POST /api/v1/sales/orders/{id}/pay
 
 权限：`sale:order:pay`
 
+> **Batch-1**：可选 `idempotencyKey`（Scope=`SALE_PAY`）；`updateBillPaid` 仅允许 `待支付`/`草稿`（禁止已支付再入账）。P3-2A 支付归属算法不变。
+
 请求：
 
 ```JSON
 {
+  "idempotencyKey": "8f1c2a6e-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "payments": [
     { "method": "WECHAT", "amount": 200 },
     { "method": "CASH", "amount": 100 }
@@ -3397,6 +3403,71 @@ POST /api/v1/saving-card-accounts/{accountId}/arrear-repay
 返回：`accountId`、`amount`、`before/afterArrearAmount`、`before/afterBalance`。
 
 语义：`ArrearAmount -= amount`，`Balance += amount`（付多少本金录多少可用）；同步减少关联销售单头欠款；写入 `TB_ErpSavingCardArrearRepay` 审计。
+
+> Batch-2：旧接口保留。合并补欠款请走下方 124B；储值增量在合并结算内按账户 CAS 更新，避免双记账。
+
+---
+
+# 124B 合并补欠款（Batch-2）
+
+## 124B.1 查询客户待补欠款（按明细行）
+
+```HTTP
+GET /api/v1/sales/arrears?customerId={id}&storeId={storeId}
+```
+
+权限：`sale:arrear:repay`
+
+返回要点（`ArrearItemVo[]`）：
+
+| 字段 | 说明 |
+|------|------|
+| sourceSaleBillId / saleDate | 原销售单号、销售日期 |
+| itemType / sourceSaleLineId / itemName | 明细类型、行 ID、名称 |
+| saleAmount / paidAmount / arrearAmount | 成交、已付、当前欠款 |
+| repayable / blockReason | 是否可补（已支付且欠款>0；本店） |
+
+范围：当前门店 `EntityID=storeId`；不含产品行；**不开放未定义跨店补缴**。
+
+## 124B.2 合并结算
+
+```HTTP
+POST /api/v1/sales/arrears/settle
+```
+
+权限：`sale:arrear:repay`
+
+请求要点：
+
+```JSON
+{
+  "idempotencyKey": "uuid",
+  "storeId": 1001,
+  "customerId": 9,
+  "arrearAllocations": [
+    { "sourceSaleBillId": "XS...", "itemType": "SAVING_CARD", "sourceSaleLineId": 2, "amount": 50.00 }
+  ],
+  "payments": [
+    { "paymentKey": "P1", "method": "CASH", "amount": 50.00 }
+  ],
+  "paymentAllocations": [
+    { "paymentKey": "P1", "targetLineKey": "SAVING_CARD:2", "amount": 50.00 }
+  ]
+}
+```
+
+业务边界：
+
+- **不**制造新销售成交；创建 `BillType=补欠款` 承载单，`TB_SaleBillPay` 挂在补欠款单。
+- 原单：`PayAmount+=`、`ArrearAmount-=`（CAS：已支付且欠款充足）；明细行欠款 CAS 扣减。
+- `TB_ErpSalePayAllocation.TargetType=ARREAR`，`TargetBillID=原销售单`，`SourceSaleLineID=原明细`；Allocation 合计=实收。
+- `TB_ErpSaleArrearRepayLine` 记录分配。
+- 幂等 Scope=`ARREAR_SETTLE`（`TB_ErpIdempotencyRecord`）；同键同参重放；同键异参拒绝。
+- 增量权益：复用 `SaleOrderRules.releasedTimesDelta`（FLOOR）；储值 CONF-012 `Balance+=amount`。
+- 暂不支持储值抵扣支付补欠款。
+- 单条不得超额；合计=实收；客户/门店隔离。
+
+返回：`repayBillId`、`payAmount`、各行 `before/afterArrear`、`rightsDelta`/`balanceDelta`。
 
 ---
 
@@ -3487,10 +3558,13 @@ PUT /api/v1/treat/config
 POST /api/v1/treat/orders
 ```
 
+> **Batch-1**：可选 `idempotencyKey`（Scope=`TREAT_CREATE`）；扣减仍依赖账户余额条件更新。超时重试须复用原键。
+
 ```JSON
 {
   "customerId": 10001,
   "storeId": 1002,
+  "idempotencyKey": "8f1c2a6e-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "billDate": "2026-09-10",
   "signatureImageUrl": "https://.../sign.png",
   "items": [
@@ -3717,13 +3791,90 @@ GET  /api/v1/appointment-schedules?storeId=
 POST /api/v1/appointment-schedules
 PUT  /api/v1/appointment-schedules/{id}
 GET  /api/v1/appointment-schedules/day-assignments?storeId=&date=
+GET  /api/v1/appointment-schedules/day-assignments?storeId=&from=&to=
 POST /api/v1/appointment-schedules/day-assignments
+POST /api/v1/appointment-schedules/day-assignments/batch
 GET  /api/v1/appointment-schedules/config?storeId=
 PUT  /api/v1/appointment-schedules/config
 ```
 
 权限：读 `appointment:view`；写 `appointment:edit`  
-前端「预约管理 → 预约配置」页（班次 / 日排班 / 门店规则 / 能力等）已对接上述读写接口；看板仍只读 config 作时间轴。
+前端「预约管理 → 预约配置」页（班次 / **整月整店矩阵排班** / 门店规则 / 能力等）已对接上述读写接口；看板仍只读 config 作时间轴。
+
+### 日排班查询
+
+- `date`：单日（默认今天）
+- `from` + `to`：闭区间整月/多日查询（优先于 `date`）；跨度不得超过 3 个月
+
+### 批量排班 `POST .../day-assignments/batch`
+
+```json
+{
+  "storeId": 1001,
+  "source": "MANUAL",
+  "items": [
+    { "employeeId": "10001", "scheduleDate": "2026-10-15", "scheduleId": 1, "rest": false },
+    { "employeeId": "10001", "scheduleDate": "2026-10-16", "rest": true },
+    { "employeeId": "10001", "scheduleDate": "2026-10-17", "clear": true }
+  ]
+}
+```
+
+- `clear=true`：删除该员工该日排班记录（回到未排班）
+- `rest=true`：整天休息（无需 `scheduleId`）
+- 上班：须带本店有效 `scheduleId`
+- 单次最多 2000 格；同事务，失败整体回滚
+
+### 门店提醒配置（同 config）
+
+`GET/PUT .../appointment-schedules/config` 扩展字段（写权限 `appointment:edit`）：
+
+| 字段 | 说明 |
+|------|------|
+| `remindEnabled` | 总开关：是否生成提醒任务 |
+| `remindOnCreate` | 创建预约后即时提醒 |
+| `remindBeforeArriveEnabled` | 到店前提醒 |
+| `remindLeadMinutes` | 提前分钟数（如 60 / 120 / 1440） |
+| `remindSmsEnabled` | 门店启用短信渠道（业务开关；不等于服务商已配置） |
+| `remindWechatEnabled` | 门店启用微信小程序渠道 |
+| `remindCancelNotifyEnabled` | 取消预约是否生成取消通知任务（默认关） |
+
+说明：业务规则可保存；真实发送依赖服务端 `erp.remind.sms.*` / `erp.remind.wechat-mini.*`。未配置时任务进入 `WAIT_CONFIG`，**禁止**写入 `SENT`。
+
+---
+
+# 185C-2 预约提醒任务与调度
+
+```HTTP
+GET  /api/v1/appointments/remind-tasks?storeId=&appointmentId=&status=&channel=&taskType=&customerId=&planFrom=&planTo=
+GET  /api/v1/appointments/{id}/remind-tasks
+POST /api/v1/appointments/remind-tasks/dispatch
+```
+
+权限：查询 `appointment:view`；手动调度 `appointment:edit`
+
+- 列表按门店隔离；手机号仅返回脱敏字段
+- `dispatch`：扫描并领取到期任务（`PENDING`/`FAILED` 且计划时间已到），短事务领取后事务外调用渠道 Provider；返回本轮处理条数
+- 定时：`erp.remind.dispatch.cron`（默认每分钟）
+
+### 任务状态
+
+| 状态 | 含义 |
+|------|------|
+| `PENDING` | 待发送 |
+| `PROCESSING` | 已领取处理中 |
+| `WAIT_CONFIG` | 渠道未配置（短信服务商 / 小程序 AppID 等）或异常渠道已隔离 |
+| `WAIT_AUTH` | 客户无 OpenID 或无有效订阅授权 |
+| `WAIT_VERIFY` | 已提交但结果未知（超时等），渠道无可靠查询/幂等时**不自动重发**，待核实 |
+| `SENT` | **真实**发送成功（须有服务商回执） |
+| `MOCK_SENT` | 仅 mock 开关开启时的模拟发送，**不得展示为真实成功** |
+| `FAILED` | 明确失败且可按退避重试 |
+| `DEAD` | 达最大重试 |
+| `CANCELLED` | 预约取消/改期/已到店等导致失效 |
+
+渠道：`SMS` / `WECHAT_MINI` / `NONE`。类型：`ON_CREATE` / `BEFORE_ARRIVE` / `ON_CANCEL`。
+
+改期：未发送的 `BEFORE_ARRIVE` 置 `CANCELLED`，按新时间幂等重建。取消：停止未发送任务；是否发取消通知由 `remindCancelNotifyEnabled` 控制。已到店：跳过未发送到店前提醒。
 
 ---
 
@@ -3807,6 +3958,18 @@ GET /api/v1/handler-candidates?bizType=PROJECT_TREAT&storeId=&keyword=
 ```
 
 返回：`handlerRoleId`（Sequence 最小 Active）、`allowedJobTypeIds`、`employees[{employeeId,name,jobTypeIds,crossStore}]`。
+
+---
+
+# 190A 经手人角色就绪检查（Batch-1 D10）
+
+```HTTP
+GET /api/v1/handler-readiness?storeId=&mode=SALE|TREAT|ALL
+```
+
+权限（OR）：`handler:candidates:view` | `sale:order:create` | `treat:order:create` | `handler:config:view`
+
+返回：`ready`、`message`、`missing[{bizType,label,hint}]`。未配置时前端开单/消耗前置拦截；**不自动生成角色或比例**。
 
 ---
 
@@ -3935,6 +4098,7 @@ POST /api/v1/refunds/{id}/approve
 
 规则（R1/R2）：必须命中 `TB_ErpApprovalRoleConfig`（`BizType=REFUND`）；未配置/未命中不可批；允许自批。  
 **销售退款**：通过后同事务自动执行（权益减量/关闭账户、写退款渠道、源单→`部分退款`/`已退款`、Process 记 `RefundOccurMonth=yyyy-MM`）；**禁止**调用 Performance reverse。  
+执行时按申请数量校验**当前可用余额**；若可用不足（例如申请后已核销），返回业务错误 `60001` 并回滚本次审批，**禁止**在权益不足时仍按创建金额出金（已消费不可当作未消费完整退回）。  
 **消耗退款（R2）**：通过后同事务自动执行（恢复项目余额/次卡次数/时效权益且不改 ValidDate/储值本金与赠送分列；源单→`2` 已退款；Process 记 `RefundOccurMonth`）；**禁止** Performance reverse / 库存回滚 / 改 SaleBill.CustomerID。
 
 请求：
@@ -4212,6 +4376,24 @@ PUT /api/v1/asset-ops/config
 GET /api/v1/performance/sales
 ```
 
+权限：`performance:view`  
+Query：`from?`、`to?`（ISO date）、`employeeId?`（当前登录门店）。  
+返回门店合计 + 员工汇总行（Pay/Card/Largess）。  
+说明：补欠款不写业绩表，故不进入本接口。
+
+---
+
+# 221B 销售业绩单据明细（HR-P0）
+
+```HTTP
+GET /api/v1/performance/sales/lines
+```
+
+权限：`performance:view`  
+Query：`from?`、`to?`、`employeeId?`、`itemType?`（PROJECT/PRODUCT/GENERAL_CARD/TIME_CARD/SAVING_CARD/PACKAGE_CARD）  
+返回：单据行（单号、日期、类型、商品、客户、经手人、ratioPercent=Scale×100、金额、业绩门店、销售门店）+ 明细合计。  
+**0 DDL**，读 `TB_SaleEntityPerformance*` × `TB_SaleBillHandler*`。
+
 ---
 
 # 222 查询员工消耗业绩
@@ -4219,6 +4401,19 @@ GET /api/v1/performance/sales
 ```HTTP
 GET /api/v1/performance/treat
 ```
+
+---
+
+# 222B 消耗/划卡业绩单据明细（HR-P0）
+
+```HTTP
+GET /api/v1/performance/treat/lines
+```
+
+权限：`performance:view`  
+Query：同 221B；`itemType` 为 PROJECT/GENERAL_CARD/TIME_CARD/SAVING_CARD（无 PRODUCT：业务 NOT_APPLICABLE）。  
+返回字段同 221B；`billStoreId`=核销门店。  
+**0 DDL**，读 `TB_TreatEntityPerformance*` × `TB_TreatBillHandler*`。
 
 ---
 

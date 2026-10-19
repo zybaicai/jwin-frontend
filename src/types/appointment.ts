@@ -145,6 +145,12 @@ export interface AppointmentConfig {
   remindOnCreate?: boolean | null
   remindLeadMinutes?: number | null
   remindEnabled?: boolean | null
+  remindBeforeArriveEnabled?: boolean | null
+  remindSmsEnabled?: boolean | null
+  remindWechatEnabled?: boolean | null
+  remindCancelNotifyEnabled?: boolean | null
+  smsProviderConfigured?: boolean | null
+  wechatProviderConfigured?: boolean | null
 }
 
 export interface AppointmentTypeItem {
@@ -176,15 +182,52 @@ export interface RemindTaskItem {
   id: number | null
   appointmentBillId: string | null
   storeId: number | null
+  customerId?: number | null
+  storeName?: string | null
+  customerName?: string | null
+  customerMobileMask?: string | null
   taskType: string | null
   channel: string | null
   planTime: string | null
   status: string | null
   content: string | null
   resultMsg: string | null
+  retryCount?: number | null
+  maxRetry?: number | null
+  nextRetryTime?: string | null
+  sentOn?: string | null
+  providerMsgId?: string | null
+  errorCode?: string | null
+  startDateTimeSnapshot?: string | null
   createdOn: string | null
   cancelledOn: string | null
+  lastProcessedOn?: string | null
 }
+
+export const REMIND_STATUS_OPTIONS = [
+  { value: 'PENDING', label: '待发送' },
+  { value: 'PROCESSING', label: '处理中' },
+  { value: 'WAIT_CONFIG', label: '待配置渠道' },
+  { value: 'WAIT_AUTH', label: '待授权' },
+  { value: 'WAIT_VERIFY', label: '待核实' },
+  { value: 'SENT', label: '发送成功' },
+  { value: 'MOCK_SENT', label: '模拟发送' },
+  { value: 'FAILED', label: '发送失败' },
+  { value: 'DEAD', label: '停止重试' },
+  { value: 'CANCELLED', label: '已取消' },
+] as const
+
+export const REMIND_CHANNEL_OPTIONS = [
+  { value: 'SMS', label: '短信' },
+  { value: 'WECHAT_MINI', label: '微信小程序' },
+  { value: 'NONE', label: '未选渠道' },
+] as const
+
+export const REMIND_TYPE_OPTIONS = [
+  { value: 'ON_CREATE', label: '创建即时' },
+  { value: 'BEFORE_ARRIVE', label: '到店前' },
+  { value: 'ON_CANCEL', label: '取消通知' },
+] as const
 
 /** 对齐 ScheduleVo（班次） */
 export interface AppointmentScheduleItem {
@@ -213,6 +256,22 @@ export interface AssignScheduleDayRequest {
   source?: string | null
 }
 
+/** 整店批量排班明细 */
+export interface BatchAssignScheduleItem {
+  employeeId: string
+  scheduleDate: string
+  /** true：清除该日排班 */
+  clear?: boolean | null
+  scheduleId?: number | null
+  rest?: boolean | null
+}
+
+export interface BatchAssignScheduleRequest {
+  storeId: number
+  items: BatchAssignScheduleItem[]
+  source?: string | null
+}
+
 export interface UpsertAppointmentConfigRequest {
   storeId: number
   startTime: string
@@ -224,6 +283,10 @@ export interface UpsertAppointmentConfigRequest {
   remindOnCreate?: boolean | null
   remindLeadMinutes?: number | null
   remindEnabled?: boolean | null
+  remindBeforeArriveEnabled?: boolean | null
+  remindSmsEnabled?: boolean | null
+  remindWechatEnabled?: boolean | null
+  remindCancelNotifyEnabled?: boolean | null
 }
 
 /** 对齐 CreateAppointmentCommand */

@@ -900,18 +900,10 @@ watch(selectedDate, () => {
                       </div>
                       <div class="pop-actions">
                         <el-button
-                          v-if="canEdit && canCancelAppointment(place.appointment.status)"
-                          type="danger"
-                          size="small"
-                          class="pop-btn"
-                          @click="quickCancel(place.appointment.id)"
-                        >
-                          取消预约
-                        </el-button>
-                        <el-button
                           v-if="canEdit && canModifyAppointment(place.appointment.status)"
                           type="primary"
                           size="small"
+                          plain
                           class="pop-btn"
                           @click="openEdit(place.appointment.id)"
                         >
@@ -934,6 +926,15 @@ watch(selectedDate, () => {
                           @click="quickOpenTreat(place.appointment.id)"
                         >
                           开消耗
+                        </el-button>
+                        <el-button
+                          v-if="canEdit && canCancelAppointment(place.appointment.status)"
+                          type="danger"
+                          size="small"
+                          class="pop-btn"
+                          @click="quickCancel(place.appointment.id)"
+                        >
+                          取消预约
                         </el-button>
                       </div>
                     </div>
@@ -1176,9 +1177,11 @@ watch(selectedDate, () => {
   display: flex;
   position: sticky;
   top: 0;
-  z-index: 3;
+  /* 高于预约卡片（5/20）与悬浮预览（30），避免下滑时卡片盖住护理师表头 */
+  z-index: 40;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid var(--board-line);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
 }
 .time-head,
 .emp-head {
@@ -1194,9 +1197,16 @@ watch(selectedDate, () => {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  background: #f1f5f9;
+}
+.time-head {
+  position: sticky;
+  left: 0;
+  z-index: 41;
+  background: #f8fafc;
 }
 .rest-head {
-  background: #f1f5f9;
+  background: #e8eef4;
   color: #64748b;
 }
 .emp-name {
@@ -1225,7 +1235,8 @@ watch(selectedDate, () => {
   border-right: 1px solid var(--board-line);
   position: sticky;
   left: 0;
-  z-index: 2;
+  /* 低于表头，高于格子内卡片，保证横滑时时间列不被卡片盖住 */
+  z-index: 6;
 }
 .time-cell {
   box-sizing: border-box;
@@ -1523,14 +1534,14 @@ watch(selectedDate, () => {
 }
 .pop-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
 }
 .pop-actions .pop-btn {
   margin: 0 !important;
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 calc(33.33% - 6px);
+  min-width: 84px;
   padding: 5px 4px;
 }
 .pop-actions :deep(.el-button + .el-button) {

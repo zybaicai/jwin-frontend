@@ -13,6 +13,7 @@ import type {
   AppointmentScheduleItem,
   AppointmentTypeItem,
   AssignScheduleDayRequest,
+  BatchAssignScheduleRequest,
   AvailableSlotItem,
   AvailableSlotsQuery,
   CancelAppointmentRequest,
@@ -204,11 +205,13 @@ export async function updateAppointmentSchedule(
 }
 
 /**
- * GET /v1/appointment-schedules/day-assignments —— 日排班
+ * GET /v1/appointment-schedules/day-assignments —— 日排班 / 整月区间
  */
 export async function fetchScheduleDayAssignments(query: {
   storeId?: number
   date?: string
+  from?: string
+  to?: string
 }): Promise<AppointmentScheduleDayEmployee[]> {
   const response = await request.get<ApiResponse<AppointmentScheduleDayEmployee[]>>(
     '/v1/appointment-schedules/day-assignments',
@@ -216,6 +219,8 @@ export async function fetchScheduleDayAssignments(query: {
       params: buildParams({
         storeId: query.storeId,
         date: query.date,
+        from: query.from,
+        to: query.to,
       }),
     },
   )
@@ -233,6 +238,19 @@ export async function assignScheduleDay(
     body,
   )
   return response.data.data
+}
+
+/**
+ * POST /v1/appointment-schedules/day-assignments/batch —— 整店批量排班
+ */
+export async function batchAssignScheduleDay(
+  body: BatchAssignScheduleRequest,
+): Promise<AppointmentScheduleDayEmployee[]> {
+  const response = await request.post<ApiResponse<AppointmentScheduleDayEmployee[]>>(
+    '/v1/appointment-schedules/day-assignments/batch',
+    body,
+  )
+  return response.data.data ?? []
 }
 
 /**
@@ -416,6 +434,11 @@ export async function fetchRemindTasks(query: {
   storeId?: number
   appointmentId?: string
   status?: string
+  channel?: string
+  taskType?: string
+  customerId?: number
+  planFrom?: string
+  planTo?: string
 }): Promise<RemindTaskItem[]> {
   const response = await request.get<ApiResponse<RemindTaskItem[]>>(
     '/v1/appointments/remind-tasks',
@@ -424,8 +447,21 @@ export async function fetchRemindTasks(query: {
         storeId: query.storeId,
         appointmentId: query.appointmentId,
         status: query.status,
+        channel: query.channel,
+        taskType: query.taskType,
+        customerId: query.customerId,
+        planFrom: query.planFrom,
+        planTo: query.planTo,
       }),
     },
   )
   return response.data.data ?? []
+}
+
+/** 手动触发到期扫描（验收/联调） */
+export async function dispatchRemindTasks(): Promise<number> {
+  const response = await request.post<ApiResponse<number>>(
+    '/v1/appointments/remind-tasks/dispatch',
+  )
+  return response.data.data ?? 0
 }

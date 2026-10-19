@@ -69,6 +69,23 @@ export interface HandlerCandidatesQuery {
   keyword?: string | null
 }
 
+/** 对齐 HandlerReadinessVo —— GET /v1/handler-readiness */
+export interface HandlerReadinessMissing {
+  bizType: string | null
+  label: string | null
+  hint: string | null
+}
+
+export interface HandlerReadinessResult {
+  storeId: number | null
+  mode: string | null
+  ready: boolean
+  message: string | null
+  missing: HandlerReadinessMissing[]
+}
+
+export type HandlerReadinessMode = 'SALE' | 'TREAT' | 'ALL'
+
 /**
  * 权限：后端 OR —— handler:candidates:view | sale:order:create | treat:order:create
  */

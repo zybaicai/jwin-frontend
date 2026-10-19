@@ -8,6 +8,14 @@ export interface ApiResponse<T = unknown> {
   requestId?: string
 }
 
+/** 分页结果，对齐后端 PageResult / 前端 PageData */
+export interface PageResult<T> {
+  total: number
+  page: number
+  size: number
+  records: T[]
+}
+
 export const ApiCode = {
   SUCCESS: 0,
   UNAUTHORIZED: 10001,

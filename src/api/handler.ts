@@ -1,6 +1,11 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/types/response'
-import type { HandlerCandidateResult, HandlerCandidatesQuery } from '@/types/handler'
+import type {
+  HandlerCandidateResult,
+  HandlerCandidatesQuery,
+  HandlerReadinessMode,
+  HandlerReadinessResult,
+} from '@/types/handler'
 
 function buildParams(
   query: Record<string, string | number | boolean | undefined | null>,
@@ -37,5 +42,29 @@ export async function fetchHandlerCandidates(
     ...data,
     allowedJobTypeIds: data.allowedJobTypeIds ?? [],
     employees: data.employees ?? [],
+  }
+}
+
+/**
+ * GET /v1/handler-readiness —— 开单/消耗前经手人角色就绪检查
+ */
+export async function fetchHandlerReadiness(query: {
+  storeId?: number | null
+  mode?: HandlerReadinessMode | null
+}): Promise<HandlerReadinessResult> {
+  const response = await request.get<ApiResponse<HandlerReadinessResult>>(
+    '/v1/handler-readiness',
+    {
+      params: buildParams({
+        storeId: query.storeId,
+        mode: query.mode,
+      }),
+    },
+  )
+  const data = response.data.data
+  return {
+    ...data,
+    missing: data.missing ?? [],
+    ready: Boolean(data.ready),
   }
 }

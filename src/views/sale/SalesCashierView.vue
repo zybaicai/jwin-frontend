@@ -15,6 +15,7 @@ import CashierSettleDialog, {
   type SettleConfirmPayload,
   type SettleLineOption,
 } from '@/components/sale/CashierSettleDialog.vue'
+import ArrearRepayDialog from '@/components/sale/ArrearRepayDialog.vue'
 import SaleOrderResultDialog from '@/components/sale/SaleOrderResultDialog.vue'
 import TreatOrderResultDialog from '@/components/sale/TreatOrderResultDialog.vue'
 import SavingConsumeProjectDialog from '@/components/sale/SavingConsumeProjectDialog.vue'
@@ -42,6 +43,7 @@ import {
   fetchTreatConfig,
   fetchTreatOrderDetail,
 } from '@/api/treat'
+import { fetchHandlerReadiness } from '@/api/handler'
 import {
   SALE_CASHIER_LAST_ORDER_KEY,
   buildCreateSaleOrderRequest,
@@ -164,9 +166,9 @@ const TOP_ACTIONS = [
   { key: 'pickup', label: '取单', enabled: false },
   { key: 'sale', label: '开单', enabled: true },
   { key: 'openCard', label: '开卡', enabled: false },
-  { key: 'recharge', label: '充值', enabled: false },
+  { key: 'recharge', label: '充值', enabled: true },
   { key: 'consume', label: '消耗', enabled: true },
-  { key: 'arrear', label: '补欠款', enabled: false },
+  { key: 'arrear', label: '补欠款', enabled: true },
 ] as const
 
 const CARD_PURCHASE_TYPES = new Set(['GENERAL_CARD', 'TIME_CARD', 'PACKAGE_CARD', 'SAVING_CARD'])
@@ -251,9 +253,18 @@ const treatResultLoading = ref(false)
 const currentTreatOrder = ref<TreatOrderDetail | null>(null)
 const postTreatAssets = ref<CustomerAvailableAssets | null>(null)
 
+/** D10：经手人角色就绪（开单前检查，不自动建角色） */
+const handlerReadinessLoading = ref(false)
+const handlerReadinessReady = ref(true)
+const handlerReadinessMessage = ref<string | null>(null)
+
 const hasSaleCreate = computed(() =>
   permissionStore.hasPermission(SalePermission.ORDER_CREATE),
 )
+const hasArrearRepay = computed(() =>
+  permissionStore.hasPermission(SalePermission.ARREAR_REPAY),
+)
+const arrearDialogVisible = ref(false)
 const hasSaleView = computed(() =>
   permissionStore.hasPermission(SalePermission.ORDER_VIEW),
 )
@@ -712,6 +723,14 @@ function nextKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** 客户端幂等键；同一提交动作内超时重试须复用 */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `idem-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function itemTypeLabel(type: string | null | undefined): string {
   const hit = ITEM_TYPE_OPTIONS.find((o) => o.value === type)
   return hit?.label || type || '—'
@@ -962,7 +981,61 @@ function onTopAction(key: string): void {
     switchMode('consume')
     return
   }
+  if (key === 'recharge') {
+    onRechargeShortcut()
+    return
+  }
+  if (key === 'arrear') {
+    onArrearShortcut()
+    return
+  }
   uiMessage.info('该入口本阶段未启用')
+}
+
+/** 充值：保留客户，切销售并预选储值卡分类；不自动选商品/下单/付款 */
+function onRechargeShortcut(): void {
+  if (!hasSaleCreate.value) {
+    uiMessage.warning('暂无销售开单权限（sale:order:create）')
+    return
+  }
+  if (!customerReady.value) {
+    uiMessage.warning('请先选择客户')
+    return
+  }
+  if (mode.value !== 'sale') {
+    mode.value = 'sale'
+    consumeLines.value = []
+    linkedAppointmentId.value = null
+  }
+  goodsItemType.value = 'SAVING_CARD'
+  goodsKeyword.value = ''
+  selectedFlatCategoryId.value = null
+  selectedL1CategoryId.value = null
+  selectedL2CategoryId.value = null
+  categoryProjectIds.value = null
+  void loadGoods().then(() => {
+    if (!goodsList.value.length) {
+      uiMessage.warning('当前无可销售储值卡，请先在商品中心维护储值卡')
+      return
+    }
+    uiMessage.info('已切换至储值卡开单，请选择要充值的储值卡商品后正常结算')
+  })
+}
+
+function onArrearShortcut(): void {
+  if (!hasArrearRepay.value) {
+    uiMessage.warning('暂无补欠款权限（sale:arrear:repay）')
+    return
+  }
+  if (!customerReady.value) {
+    uiMessage.warning('请先选择客户')
+    return
+  }
+  if (currentStoreId.value == null) {
+    uiMessage.warning('请先选择门店')
+    return
+  }
+  arrearDialogVisible.value = true
 }
 
 async function loadChannels(): Promise<void> {
@@ -1372,11 +1445,50 @@ async function loadAssets(): Promise<void> {
     assetsError.value = null
     try {
       assets.value = await fetchCustomerAvailableAssets(customer.value!.id)
+      await tryPrefillAppointmentProjects()
     } catch (error) {
       assets.value = null
       assetsError.value = getUserFriendlyErrorMessage(error)
     }
   })
+}
+
+/** 预约开消耗：按 query.projectIds 自动勾选可用项目资产（不重复添加） */
+async function tryPrefillAppointmentProjects(): Promise<void> {
+  if (!linkedAppointmentId.value || mode.value !== 'consume') return
+  const raw = parseQueryText(route.query.projectIds)
+  if (!raw) return
+  const want = new Set(
+    raw
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0),
+  )
+  if (want.size === 0) return
+  const data = assets.value
+  if (!data) return
+  const existing = new Set(
+    consumeLines.value
+      .map((l) => l.projectId)
+      .filter((id): id is number => id != null),
+  )
+  for (const p of data.projects ?? []) {
+    if (p.projectId == null || !want.has(p.projectId)) continue
+    if (p.canUse === false) continue
+    if (existing.has(p.projectId)) continue
+    addConsumeLine({
+      itemType: TreatItemType.PROJECT,
+      accountId: p.accountId,
+      projectId: p.projectId,
+      name: p.name || `项目#${p.projectId}`,
+      assetName: p.name || '',
+      remainText: `剩余 ${p.balance ?? 0} 次`,
+      fundSource: null,
+      amountHint: null,
+      amountHintLabel: '预约预填',
+    })
+    existing.add(p.projectId)
+  }
 }
 
 function ensureCustomerForLine(): boolean {
@@ -1723,6 +1835,10 @@ function buildCreateSaleRequest(payload: SettleConfirmPayload): CreateSaleOrderR
 }
 
 function openSettleForNewOrder(): void {
+  if (!handlerReadinessReady.value) {
+    uiMessage.warning(handlerReadinessMessage.value || '本店经手人角色未配置完整，暂不可开单')
+    return
+  }
   const block = getSaleCheckoutBlockReason({
     hasCreatePermission: hasSaleCreate.value,
     customerReady: customerReady.value,
@@ -1812,6 +1928,11 @@ async function refreshOrderResult(orderId: string): Promise<void> {
 async function onSettleConfirm(payload: SettleConfirmPayload): Promise<void> {
   await runExclusive(settleSubmitting, async () => {
     try {
+      if (!handlerReadinessReady.value) {
+        uiMessage.warning(handlerReadinessMessage.value || '本店经手人角色未配置完整，暂不可结账')
+        return
+      }
+      const idempotencyKey = newIdempotencyKey()
       if (payExistingOrderId.value) {
         if (payload.createOnly) {
           uiMessage.warning('待支付订单请直接登记收款')
@@ -1822,24 +1943,31 @@ async function onSettleConfirm(payload: SettleConfirmPayload): Promise<void> {
           return
         }
         const orderId = payExistingOrderId.value
+        const payBody = {
+          idempotencyKey,
+          payments: payload.payments,
+        }
         try {
-          currentOrder.value = await paySaleOrder(orderId, {
-            payments: payload.payments,
-          })
+          currentOrder.value = await paySaleOrder(orderId, payBody)
         } catch (error) {
           try {
-            const latest = await fetchSaleOrderDetail(orderId)
-            currentOrder.value = latest
-            if (latest.billStatus === '已支付') {
-              settleVisible.value = false
-              await refreshOrderResult(orderId)
-              uiMessage.success('订单已支付，已刷新最新状态')
-              return
+            // 超时重试：复用同一幂等键
+            currentOrder.value = await paySaleOrder(orderId, payBody)
+          } catch (retryError) {
+            try {
+              const latest = await fetchSaleOrderDetail(orderId)
+              currentOrder.value = latest
+              if (latest.billStatus === '已支付') {
+                settleVisible.value = false
+                await refreshOrderResult(orderId)
+                uiMessage.success('订单已支付，已刷新最新状态')
+                return
+              }
+            } catch {
+              /* keep original error */
             }
-          } catch {
-            /* keep original error */
+            throw retryError ?? error
           }
-          throw error
         }
         settleVisible.value = false
         await refreshOrderResult(orderId)
@@ -1848,24 +1976,30 @@ async function onSettleConfirm(payload: SettleConfirmPayload): Promise<void> {
       }
 
       const body = buildCreateSaleRequest(payload)
+      body.idempotencyKey = idempotencyKey
       let order: SaleOrderDetail
       try {
         order = await createSaleOrder(body)
       } catch (error) {
-        const cached = sessionStorage.getItem(SALE_CASHIER_LAST_ORDER_KEY)
-        if (cached && hasSaleView.value) {
-          try {
-            const latest = await fetchSaleOrderDetail(cached)
-            currentOrder.value = latest
-            settleVisible.value = false
-            resultVisible.value = true
-            uiMessage.warning('创建异常，已尝试加载最近订单，请核对是否重复开单')
-            return
-          } catch {
-            /* fallthrough */
+        try {
+          // 超时重试：复用同一幂等键，避免重复建单
+          order = await createSaleOrder(body)
+        } catch (retryError) {
+          const cached = sessionStorage.getItem(SALE_CASHIER_LAST_ORDER_KEY)
+          if (cached && hasSaleView.value) {
+            try {
+              const latest = await fetchSaleOrderDetail(cached)
+              currentOrder.value = latest
+              settleVisible.value = false
+              resultVisible.value = true
+              uiMessage.warning('创建异常，已尝试加载最近订单，请核对是否重复开单')
+              return
+            } catch {
+              /* fallthrough */
+            }
           }
+          throw retryError ?? error
         }
-        throw error
       }
       persistLastOrderId(order.id)
       currentOrder.value = order
@@ -1960,6 +2094,10 @@ async function onSubmitConsume(): Promise<void> {
     uiMessage.warning('无消耗开单权限（treat:order:create）')
     return
   }
+  if (!handlerReadinessReady.value) {
+    uiMessage.warning(handlerReadinessMessage.value || '本店经手人角色未配置完整，暂不可开消耗')
+    return
+  }
   const linesForSubmit = consumeLines.value.map((l) => ({
     itemType: l.itemType,
     accountId: l.accountId,
@@ -2011,6 +2149,10 @@ async function onSubmitConsume(): Promise<void> {
 
   await runExclusive(treatSubmitting, async () => {
     try {
+      if (!handlerReadinessReady.value) {
+        uiMessage.warning(handlerReadinessMessage.value || '本店经手人角色未配置完整，暂不可开消耗')
+        return
+      }
       const body = buildCreateTreatOrderRequest({
         customerId: customer.value!.id,
         storeId: currentStoreId.value,
@@ -2024,21 +2166,26 @@ async function onSubmitConsume(): Promise<void> {
           ratio: h.ratio,
         })),
       })
+      body.idempotencyKey = newIdempotencyKey()
       let order: TreatOrderDetail
       try {
         order = await createTreatOrder(body)
       } catch (error) {
-        const cached = sessionStorage.getItem(TREAT_CASHIER_LAST_ORDER_KEY)
-        if (cached && hasTreatView.value) {
-          try {
-            await refreshTreatResult(cached)
-            uiMessage.warning('提交异常，已尝试加载最近消耗单，请核对是否重复扣减')
-            return
-          } catch {
-            /* fallthrough */
+        try {
+          order = await createTreatOrder(body)
+        } catch (retryError) {
+          const cached = sessionStorage.getItem(TREAT_CASHIER_LAST_ORDER_KEY)
+          if (cached && hasTreatView.value) {
+            try {
+              await refreshTreatResult(cached)
+              uiMessage.warning('提交异常，已尝试加载最近消耗单，请核对是否重复扣减')
+              return
+            } catch {
+              /* fallthrough */
+            }
           }
+          throw retryError ?? error
         }
-        throw error
       }
       currentTreatOrder.value = order
       persistLastTreatOrderId(order.id)
@@ -2134,6 +2281,43 @@ watch(backdateEnabled, (on) => {
   }
 })
 
+async function loadHandlerReadiness(): Promise<void> {
+  if (!canEnterWorkbench.value) {
+    handlerReadinessReady.value = true
+    handlerReadinessMessage.value = null
+    return
+  }
+  const sid = currentStoreId.value
+  if (sid == null) {
+    handlerReadinessReady.value = false
+    handlerReadinessMessage.value = '请先选择门店后再开单或消耗'
+    return
+  }
+  await runExclusive(handlerReadinessLoading, async () => {
+    try {
+      const modeParam = mode.value === 'consume' ? 'TREAT' : 'SALE'
+      const result = await fetchHandlerReadiness({ storeId: sid, mode: modeParam })
+      handlerReadinessReady.value = result.ready
+      handlerReadinessMessage.value = result.message
+    } catch (error) {
+      // 检查失败不阻断已配置门店：保持 ready，错误仅提示
+      handlerReadinessReady.value = true
+      handlerReadinessMessage.value = null
+      uiMessage.warning(
+        `经手人配置检查失败：${getUserFriendlyErrorMessage(error)}（若开单报错请联系管理员）`,
+      )
+    }
+  })
+}
+
+watch(
+  [mode, currentStoreId],
+  () => {
+    void loadHandlerReadiness()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   if (customerSearchTimer != null) {
     clearTimeout(customerSearchTimer)
@@ -2174,6 +2358,15 @@ void tryRestoreOrderFromQuery()
         <span class="store">门店 {{ storeStore.currentStoreName || '—' }}</span>
       </div>
     </header>
+
+    <el-alert
+      v-if="canEnterWorkbench && !handlerReadinessReady && handlerReadinessMessage"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="handler-readiness-alert"
+      :title="handlerReadinessMessage"
+    />
 
     <AppError
       v-if="!canEnterWorkbench"
@@ -2701,6 +2894,13 @@ void tryRestoreOrderFromQuery()
 
     <SaleCustomerSelector v-model="selectorVisible" @select="applySelectedCustomer" />
 
+    <ArrearRepayDialog
+      v-model="arrearDialogVisible"
+      :customer-id="customer?.id ?? null"
+      :customer-name="selectedCustomerLabel"
+      :store-id="currentStoreId"
+    />
+
     <CustomerDetailDrawer
       v-model="detailDrawerVisible"
       :customer-id="customer?.id ?? null"
@@ -2819,6 +3019,11 @@ void tryRestoreOrderFromQuery()
   padding: 8px 12px;
   border-bottom: 1px solid #e8e8e8;
   background: var(--el-color-primary-light-9);
+}
+
+.handler-readiness-alert {
+  margin: 0;
+  border-radius: 0;
 }
 
 .mode-actions {

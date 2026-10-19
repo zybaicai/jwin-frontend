@@ -85,6 +85,31 @@ const IconGoods = menuIcon('IconGoods', () => [
   h('path', { d: 'M12 11 V21' }),
 ])
 
+const IconHr = menuIcon('IconHr', () => [
+  h('circle', { cx: '9', cy: '8', r: '3' }),
+  h('path', { d: 'M3 19 C3 15.5 5.5 14 9 14 C12.5 14 15 15.5 15 19' }),
+  h('rect', { x: '15', y: '6', width: '6', height: '8', rx: '1' }),
+])
+
+const IconHrAuth = menuIcon('IconHrAuth', () => [
+  h('rect', { x: '5', y: '11', width: '14', height: '9', rx: '2' }),
+  h('path', { d: 'M8 11 V8 C8 5.8 9.8 4 12 4 C14.2 4 16 5.8 16 8 V11' }),
+])
+
+const IconHrHandler = menuIcon('IconHrHandler', () => [
+  h('path', { d: 'M4 7 H20' }),
+  h('path', { d: 'M4 12 H16' }),
+  h('path', { d: 'M4 17 H12' }),
+  h('circle', { cx: '18', cy: '12', r: '3' }),
+])
+
+const IconHrPerf = menuIcon('IconHrPerf', () => [
+  h('path', { d: 'M4 19 V10' }),
+  h('path', { d: 'M10 19 V6' }),
+  h('path', { d: 'M16 19 V13' }),
+  h('path', { d: 'M22 19 H2' }),
+])
+
 /**
  * 静态菜单树。叶子 path 必须已在 router 注册。
  * 父级无 permission；子项权限由 Sidebar 过滤。
@@ -242,6 +267,12 @@ export const appMenu: AppMenuItem[] = [
         title: '预约配置',
         permission: 'appointment:view',
       },
+      {
+        path: '/appointments/remind-records',
+        name: 'appointment-remind-records',
+        title: '提醒记录',
+        permission: 'appointment:view',
+      },
     ],
   },
   {
@@ -297,6 +328,112 @@ export const appMenu: AppMenuItem[] = [
         name: 'refund-config',
         title: '退款配置',
         permission: 'refund:order:approve',
+      },
+    ],
+  },
+  {
+    name: 'group-hr-org',
+    title: '组织人员',
+    icon: IconHr,
+    children: [
+      {
+        path: '/hr/org',
+        name: 'hr-org',
+        title: '组织架构',
+        permission: 'org:store:view',
+      },
+      {
+        path: '/hr/employees',
+        name: 'hr-employees',
+        title: '通讯录',
+        permission: 'org:employee:view',
+      },
+      {
+        path: '/hr/cross-store',
+        name: 'hr-cross-store',
+        title: '跨店员工',
+        permission: 'org:employee:view',
+      },
+      {
+        path: '/hr/job-types',
+        name: 'hr-job-types',
+        title: '职务配置',
+        permission: 'org:job:view',
+      },
+    ],
+  },
+  {
+    name: 'group-hr-auth',
+    title: '权限管理',
+    icon: IconHrAuth,
+    children: [
+      {
+        path: '/hr/role-permissions',
+        name: 'hr-role-permissions',
+        title: '角色权限',
+        permission: 'org:role:view',
+      },
+      {
+        path: '/hr/user-permissions',
+        name: 'hr-user-permissions',
+        title: '用户权限',
+        permission: 'org:role:view',
+      },
+    ],
+  },
+  {
+    name: 'group-hr-handler',
+    title: '业绩配置',
+    icon: IconHrHandler,
+    children: [
+      {
+        path: '/hr/sale-handlers',
+        name: 'hr-sale-handlers',
+        title: '销售业绩人员配置',
+        permission: 'handler:config:view',
+      },
+      {
+        path: '/hr/treat-handlers',
+        name: 'hr-treat-handlers',
+        title: '消耗/划卡人员配置',
+        permission: 'handler:config:view',
+      },
+    ],
+  },
+  {
+    name: 'group-hr-perf',
+    title: '业绩提成',
+    icon: IconHrPerf,
+    children: [
+      {
+        path: '/hr/sale-performance',
+        name: 'hr-sale-performance',
+        title: '销售业绩',
+        permission: 'performance:view',
+      },
+      {
+        path: '/hr/treat-performance',
+        name: 'hr-treat-performance',
+        title: '划卡业绩',
+        permission: 'performance:view',
+      },
+      {
+        path: '/hr/sale-commission-rules',
+        name: 'hr-sale-commission-rules',
+        title: '销售提成规则',
+        permission: 'commission:view',
+      },
+      {
+        path: '/hr/treat-commission-rules',
+        name: 'hr-treat-commission-rules',
+        title: '划卡提成规则',
+        permission: 'commission:view',
+      },
+      {
+        path: '/hr/commission-calc',
+        name: 'hr-commission-calc',
+        title: '提成计算',
+        permission: 'commission:view',
       },
     ],
   },

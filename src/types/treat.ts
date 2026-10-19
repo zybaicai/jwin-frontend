@@ -98,6 +98,8 @@ export type CreateTreatOrderHandlerDraft = CreateTreatOrderHandler
 export interface CreateTreatOrderRequest {
   customerId: number
   storeId?: number | null
+  /** 消耗创建幂等键；超时重试须复用 */
+  idempotencyKey?: string | null
   billDate?: string | null
   remark?: string | null
   signatureImageUrl?: string | null

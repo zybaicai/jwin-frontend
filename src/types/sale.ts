@@ -143,6 +143,8 @@ export interface SalePaymentAllocationInput {
 export interface CreateSaleOrderRequest {
   customerId: number
   storeId?: number | null
+  /** 客户端幂等键；超时重试须复用 */
+  idempotencyKey?: string | null
   /** 兼容旧客户端；纯卡/产品可省略 */
   saleChannelId?: number | null
   /** LocalDate yyyy-MM-dd；空=今天；补单需 sale:order:backdate */
@@ -159,6 +161,8 @@ export interface CreateSaleOrderRequest {
 
 /** 对齐 PaySaleOrderCommand —— POST /v1/sales/orders/{id}/pay */
 export interface PaySaleOrderRequest {
+  /** 补记收款幂等键；超时重试须复用 */
+  idempotencyKey?: string | null
   payments: SalePaymentInput[]
   paymentAllocations?: SalePaymentAllocationInput[] | null
 }
@@ -168,6 +172,62 @@ export interface PayMethodOption {
   id: number
   name: string | null
   code: string | null
+}
+
+/** 对齐 ArrearItemVo —— GET /v1/sales/arrears */
+export interface ArrearItem {
+  sourceSaleBillId: string
+  saleDate: string | null
+  storeId: number
+  customerId: number
+  itemType: string
+  sourceSaleLineId: number
+  itemId: number | null
+  itemName: string | null
+  saleAmount: number
+  receivableAmount: number
+  paidAmount: number
+  arrearAmount: number
+  accountId: number | null
+  billStatus: string | null
+  repayable: boolean
+  blockReason: string | null
+}
+
+/** 对齐 SettleArrearCommand —— POST /v1/sales/arrears/settle */
+export interface SettleArrearRequest {
+  idempotencyKey?: string | null
+  storeId: number
+  customerId: number
+  remark?: string | null
+  arrearAllocations: Array<{
+    sourceSaleBillId: string
+    itemType: string
+    sourceSaleLineId: number
+    amount: number
+  }>
+  payments: SalePaymentInput[]
+  paymentAllocations?: SalePaymentAllocationInput[] | null
+}
+
+/** 对齐 SettleArrearResultVo */
+export interface SettleArrearResult {
+  repayBillId: string
+  customerId: number
+  storeId: number
+  payAmount: number
+  lines: Array<{
+    sourceSaleBillId: string
+    itemType: string
+    sourceSaleLineId: number
+    amount: number
+    beforeArrear?: number | null
+    afterArrear?: number | null
+    beforePaid?: number | null
+    afterPaid?: number | null
+    rightsDelta?: number | null
+    balanceDelta?: number | null
+  }>
 }
 
 /** GET /v1/sales/orders 分页查询（门店由登录态限定，不可越权） */

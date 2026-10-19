@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/types/response'
 import type {
+  ArrearItem,
   CreateSaleOrderHandler,
   CreateSaleOrderRequest,
   PayMethodOption,
@@ -8,6 +9,8 @@ import type {
   SaleOrderDetail,
   SaleOrderPageData,
   SaleOrderPageQuery,
+  SettleArrearRequest,
+  SettleArrearResult,
 } from '@/types/sale'
 import { normalizeSaleOrderDetail } from '@/utils/sale/normalizeSaleOrder'
 
@@ -142,4 +145,32 @@ export async function createSaleRefund(body: {
 export async function fetchPayMethods(): Promise<PayMethodOption[]> {
   const response = await request.get<ApiResponse<PayMethodOption[]>>('/v1/payments/methods')
   return response.data.data ?? []
+}
+
+/**
+ * GET /v1/sales/arrears —— 客户待补欠款（按明细行）
+ * 权限：sale:arrear:repay
+ */
+export async function fetchCustomerArrears(
+  customerId: number,
+  storeId: number,
+): Promise<ArrearItem[]> {
+  const response = await request.get<ApiResponse<ArrearItem[]>>('/v1/sales/arrears', {
+    params: { customerId, storeId },
+  })
+  return response.data.data ?? []
+}
+
+/**
+ * POST /v1/sales/arrears/settle —— 合并补欠款结算
+ * 权限：sale:arrear:repay
+ */
+export async function settleCustomerArrears(
+  body: SettleArrearRequest,
+): Promise<SettleArrearResult> {
+  const response = await request.post<ApiResponse<SettleArrearResult>>(
+    '/v1/sales/arrears/settle',
+    body,
+  )
+  return response.data.data
 }

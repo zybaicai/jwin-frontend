@@ -16,6 +16,7 @@ import SaleOrderDetailView from '@/views/sale/SaleOrderDetailView.vue'
 import TreatOrderListView from '@/views/sale/TreatOrderListView.vue'
 import AppointmentBoardView from '@/views/appointment/AppointmentBoardView.vue'
 import AppointmentConfigView from '@/views/appointment/AppointmentConfigView.vue'
+import AppointmentRemindRecordView from '@/views/appointment/AppointmentRemindRecordView.vue'
 import PostponeBillListView from '@/views/assetops/PostponeBillListView.vue'
 import TransferBillListView from '@/views/assetops/TransferBillListView.vue'
 import RefundBillListView from '@/views/refund/RefundBillListView.vue'
@@ -32,6 +33,16 @@ import PackageCardManageView from '@/views/goods/PackageCardManageView.vue'
 import ConsumableCategoryManageView from '@/views/goods/ConsumableCategoryManageView.vue'
 import ConsumableTemplateManageView from '@/views/goods/ConsumableTemplateManageView.vue'
 import UnderConstructionView from '@/views/common/UnderConstructionView.vue'
+import OrgStructureView from '@/views/hr/OrgStructureView.vue'
+import EmployeeDirectoryView from '@/views/hr/EmployeeDirectoryView.vue'
+import CrossStoreEmployeeView from '@/views/hr/CrossStoreEmployeeView.vue'
+import JobTypeManageView from '@/views/hr/JobTypeManageView.vue'
+import RolePermissionView from '@/views/hr/RolePermissionView.vue'
+import UserPermissionView from '@/views/hr/UserPermissionView.vue'
+import SaleHandlerConfigView from '@/views/hr/SaleHandlerConfigView.vue'
+import TreatHandlerConfigView from '@/views/hr/TreatHandlerConfigView.vue'
+import SalePerformanceView from '@/views/hr/SalePerformanceView.vue'
+import TreatPerformanceView from '@/views/hr/TreatPerformanceView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -206,6 +217,20 @@ const router = createRouter({
         {
           path: 'appointments/schedule',
           redirect: '/appointments/config',
+        },
+        {
+          path: 'appointments/remind-records',
+          name: 'appointment-remind-records',
+          component: AppointmentRemindRecordView,
+          meta: {
+            requiresAuth: true,
+            title: '提醒记录',
+            permission: 'appointment:view',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
         },
         {
           path: 'appointments',
@@ -479,6 +504,188 @@ const router = createRouter({
             keepAlive: true,
             tabClosable: true,
             workspaceTab: true,
+          },
+        },
+        {
+          path: 'hr/org',
+          name: 'hr-org',
+          component: OrgStructureView,
+          meta: {
+            requiresAuth: true,
+            title: '组织架构',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:store:view',
+          },
+        },
+        {
+          path: 'hr/employees',
+          name: 'hr-employees',
+          component: EmployeeDirectoryView,
+          meta: {
+            requiresAuth: true,
+            title: '通讯录',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:employee:view',
+          },
+        },
+        {
+          path: 'hr/cross-store',
+          name: 'hr-cross-store',
+          component: CrossStoreEmployeeView,
+          meta: {
+            requiresAuth: true,
+            title: '跨店员工',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:employee:view',
+          },
+        },
+        {
+          path: 'hr/job-types',
+          name: 'hr-job-types',
+          component: JobTypeManageView,
+          meta: {
+            requiresAuth: true,
+            title: '职务配置',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:job:view',
+          },
+        },
+        {
+          path: 'hr/role-permissions',
+          name: 'hr-role-permissions',
+          component: RolePermissionView,
+          meta: {
+            requiresAuth: true,
+            title: '角色权限',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:role:view',
+          },
+        },
+        {
+          path: 'hr/user-permissions',
+          name: 'hr-user-permissions',
+          component: UserPermissionView,
+          meta: {
+            requiresAuth: true,
+            title: '用户权限',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'org:role:view',
+          },
+        },
+        {
+          path: 'hr/sale-handlers',
+          name: 'hr-sale-handlers',
+          component: SaleHandlerConfigView,
+          meta: {
+            requiresAuth: true,
+            title: '销售业绩人员配置',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'handler:config:view',
+          },
+        },
+        {
+          path: 'hr/treat-handlers',
+          name: 'hr-treat-handlers',
+          component: TreatHandlerConfigView,
+          meta: {
+            requiresAuth: true,
+            title: '消耗/划卡人员配置',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'handler:config:view',
+          },
+        },
+        {
+          path: 'hr/sale-performance',
+          name: 'hr-sale-performance',
+          component: SalePerformanceView,
+          meta: {
+            requiresAuth: true,
+            title: '销售业绩',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'performance:view',
+          },
+        },
+        {
+          path: 'hr/treat-performance',
+          name: 'hr-treat-performance',
+          component: TreatPerformanceView,
+          meta: {
+            requiresAuth: true,
+            title: '划卡业绩',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'performance:view',
+          },
+        },
+        {
+          path: 'hr/sale-commission-rules',
+          name: 'hr-sale-commission-rules',
+          component: UnderConstructionView,
+          meta: {
+            requiresAuth: true,
+            title: '销售提成规则',
+            keepAlive: false,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'commission:view',
+          },
+        },
+        {
+          path: 'hr/treat-commission-rules',
+          name: 'hr-treat-commission-rules',
+          component: UnderConstructionView,
+          meta: {
+            requiresAuth: true,
+            title: '划卡提成规则',
+            keepAlive: false,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'commission:view',
+          },
+        },
+        {
+          path: 'hr/commission-calc',
+          name: 'hr-commission-calc',
+          component: UnderConstructionView,
+          meta: {
+            requiresAuth: true,
+            title: '提成计算',
+            keepAlive: false,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+            permission: 'commission:view',
           },
         },
       ],
