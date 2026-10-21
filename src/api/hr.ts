@@ -1,6 +1,12 @@
 import request from '@/utils/request'
 import type { ApiResponse, PageResult } from '@/types/response'
 import type {
+  CommissionDetailRecord,
+  CommissionResultRecord,
+  CommissionRuleDeleteBody,
+  CommissionRuleMeta,
+  CommissionRuleRecord,
+  CommissionRuleUpsertBody,
   CreateEmployeeBody,
   CrossStoreEmployee,
   EmployeePageQuery,
@@ -11,6 +17,8 @@ import type {
   MenuPermissionNode,
   PerformanceLineResult,
   PerformanceQueryResult,
+  TierRecord,
+  TierSchemeRecord,
   UpdateEmployeeBody,
 } from '@/types/hr'
 import {
@@ -36,10 +44,15 @@ export async function createOrganization(body: {
   name: string
   store: boolean
   warehouse: boolean
-  provinceCode?: string
-  cityCode?: string
-  areaCode?: string
-  addressDetail?: string
+  provinceCode?: string | null
+  cityCode?: string | null
+  areaCode?: string | null
+  addressDetail?: string | null
+  longitude?: number | null
+  latitude?: number | null
+  active?: boolean
+  remark?: string | null
+  priceAreaId?: number | null
 }): Promise<OrganizationTreeNode> {
   const res = await request.post<ApiResponse<OrganizationTreeNode>>('/v1/organizations', body)
   return res.data.data
@@ -53,10 +66,14 @@ export async function updateOrganization(
     store: boolean
     warehouse: boolean
     active: boolean
-    provinceCode?: string
-    cityCode?: string
-    areaCode?: string
-    addressDetail?: string
+    provinceCode?: string | null
+    cityCode?: string | null
+    areaCode?: string | null
+    addressDetail?: string | null
+    longitude?: number | null
+    latitude?: number | null
+    remark?: string | null
+    priceAreaId?: number | null
   },
 ): Promise<OrganizationTreeNode> {
   const res = await request.put<ApiResponse<OrganizationTreeNode>>(`/v1/organizations/${id}`, body)
@@ -74,6 +91,14 @@ export async function fetchEmployeePage(query: EmployeePageQuery): Promise<PageR
 export async function fetchEmployeeDetail(id: string): Promise<EmployeeRecord> {
   const res = await request.get<ApiResponse<EmployeeRecord>>(`/v1/employees/${id}`)
   return res.data.data
+}
+
+/** 明确操作查看数据范围内员工的完整手机号。需要 employee:mobile:view_full。 */
+export async function fetchEmployeeFullMobile(id: string): Promise<string> {
+  const res = await request.get<ApiResponse<{ employeeId: string; phoneNumber: string }>>(
+    `/v1/employees/${id}/mobile`,
+  )
+  return res.data.data?.phoneNumber ?? ''
 }
 
 export async function createEmployee(body: CreateEmployeeBody): Promise<EmployeeRecord> {
@@ -184,6 +209,16 @@ export async function replaceEmployeeRoleAccess(
   return res.data.data
 }
 
+/** 同一套角色和组织范围覆盖多名员工。一次最多 100 人。 */
+export async function batchReplaceEmployeeRoleAccess(body: {
+  employeeIds: string[]
+  jobTypeIds: number[]
+  orgEntityIds: number[]
+}): Promise<number> {
+  const res = await request.post<ApiResponse<number>>('/v1/employees/role-access/batch', body)
+  return res.data.data
+}
+
 /** —— 经手人角色配置 —— */
 export async function fetchHandlerRoles(params: {
   bizType: string
@@ -284,4 +319,142 @@ export async function fetchTreatPerformanceLines(params?: {
     params,
   })
   return res.data.data
+}
+
+/** —— 提成规则（C2：销售/划卡各族四级费率链 + 项目月阶梯） —— */
+export async function fetchCommissionRuleMetas(params?: {
+  scene?: string
+  itemType?: string
+}): Promise<CommissionRuleMeta[]> {
+  const res = await request.get<ApiResponse<CommissionRuleMeta[]>>('/v1/commission-rules/meta', {
+    params,
+  })
+  return res.data.data ?? []
+}
+
+export async function fetchCommissionRuleMeta(scene: string, itemType: string): Promise<CommissionRuleMeta> {
+  const res = await request.get<ApiResponse<CommissionRuleMeta>>('/v1/commission-rules/meta/one', {
+    params: { scene, itemType },
+  })
+  return res.data.data
+}
+
+export async function fetchCommissionRules(params: {
+  scene: string
+  itemType: string
+  level: string
+  storeId: number
+  itemId?: number
+  handlerRoleId?: number
+  jobTypeId?: number
+}): Promise<CommissionRuleRecord[]> {
+  const res = await request.get<ApiResponse<CommissionRuleRecord[]>>('/v1/commission-rules', {
+    params,
+  })
+  return res.data.data ?? []
+}
+
+export async function fetchCommissionRuleDetail(params: {
+  scene: string
+  itemType: string
+  level: string
+  storeId: number
+  itemId?: number
+  handlerRoleId?: number
+  jobTypeId?: number
+}): Promise<CommissionRuleRecord> {
+  const res = await request.get<ApiResponse<CommissionRuleRecord>>('/v1/commission-rules/detail', {
+    params,
+  })
+  return res.data.data
+}
+
+export async function upsertCommissionRule(body: CommissionRuleUpsertBody): Promise<CommissionRuleRecord> {
+  const res = await request.post<ApiResponse<CommissionRuleRecord>>('/v1/commission-rules', body)
+  return res.data.data
+}
+
+export async function updateCommissionRule(body: CommissionRuleUpsertBody): Promise<CommissionRuleRecord> {
+  const res = await request.put<ApiResponse<CommissionRuleRecord>>('/v1/commission-rules', body)
+  return res.data.data
+}
+
+export async function deleteCommissionRule(body: CommissionRuleDeleteBody): Promise<void> {
+  await request.delete('/v1/commission-rules', { data: body })
+}
+
+/** 项目划卡月阶梯（TK_EmployeeCommission 族） */
+export async function fetchTierSchemes(storeId: number): Promise<TierSchemeRecord[]> {
+  const res = await request.get<ApiResponse<TierSchemeRecord[]>>('/v1/commission-rules/tier-schemes', {
+    params: { storeId },
+  })
+  return res.data.data ?? []
+}
+
+export async function createTierScheme(body: {
+  storeId: number
+  name: string
+  active?: boolean
+}): Promise<TierSchemeRecord> {
+  const res = await request.post<ApiResponse<TierSchemeRecord>>('/v1/commission-rules/tier-schemes', body)
+  return res.data.data
+}
+
+export async function updateTierSchemeState(id: number, active: boolean): Promise<void> {
+  await request.put(`/v1/commission-rules/tier-schemes/${id}/state`, { active })
+}
+
+export async function deleteTierScheme(id: number): Promise<void> {
+  await request.delete(`/v1/commission-rules/tier-schemes/${id}`)
+}
+
+export async function upsertTier(body: {
+  id?: number | null
+  schemeId: number
+  beginPerformance: number
+  endPerformance?: number | null
+  rate: number | null
+  fixed: number | null
+}): Promise<TierRecord> {
+  const res = await request.post<ApiResponse<TierRecord>>('/v1/commission-rules/tiers', body)
+  return res.data.data
+}
+
+export async function deleteTier(id: number): Promise<void> {
+  await request.delete(`/v1/commission-rules/tiers/${id}`)
+}
+
+/** —— 提成计算 —— */
+export async function previewCommission(body: {
+  month: string
+  storeId: number
+}): Promise<CommissionResultRecord> {
+  const res = await request.post<ApiResponse<CommissionResultRecord>>('/v1/commissions/preview', body)
+  return res.data.data
+}
+
+export async function calculateCommission(body: {
+  month: string
+  storeId: number
+}): Promise<CommissionResultRecord> {
+  const res = await request.post<ApiResponse<CommissionResultRecord>>('/v1/commissions/calculate', body)
+  return res.data.data
+}
+
+export async function fetchCommissionResult(month: string, storeId: number): Promise<CommissionResultRecord> {
+  const res = await request.get<ApiResponse<CommissionResultRecord>>('/v1/commissions', {
+    params: { month, storeId },
+  })
+  return res.data.data
+}
+
+export async function fetchCommissionDetails(params: {
+  month: string
+  storeId: number
+  employeeId?: string
+}): Promise<CommissionDetailRecord[]> {
+  const res = await request.get<ApiResponse<CommissionDetailRecord[]>>('/v1/commissions/details', {
+    params,
+  })
+  return res.data.data ?? []
 }

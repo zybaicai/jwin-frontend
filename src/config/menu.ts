@@ -337,12 +337,6 @@ export const appMenu: AppMenuItem[] = [
     icon: IconHr,
     children: [
       {
-        path: '/hr/org',
-        name: 'hr-org',
-        title: '组织架构',
-        permission: 'org:store:view',
-      },
-      {
         path: '/hr/employees',
         name: 'hr-employees',
         title: '通讯录',

@@ -202,7 +202,7 @@ GET  /actuator/health
 | 装载     | 每次请求重载角色、组织范围、`storeIds`、`permissionCodes`；`dataScope=SPECIFIED_STORE`                       |
 
 
-配置：`PUT /api/v1/employees/{id}/role-access` 一并提交 `jobTypeIds` + `orgEntityIds`。  
+配置：`PUT /api/v1/employees/{id}/role-access` 一并提交 `jobTypeIds` + `orgEntityIds`。多人使用同一套配置时走 `POST /api/v1/employees/role-access/batch`，整批覆盖，任一失败则全部回滚。  
 功能码模板：`PUT /api/v1/job-types/{id}/permissions`。
 
 种子脚本：`db/erp_permission_seed.sql`（建绑定表 + 初始权限点；并为 `JobTypeID=1` 绑定全部码便于联调）。
@@ -616,12 +616,14 @@ Authorization: Bearer {token}
 GET /api/v1/employees
 ```
 
-点击组织节点查看该组织下人员。对齐旧接口 `EntityID + PageNum + SearchKey + State + JobID`。
+点击组织节点查看该节点及其全部下级组织中的人员。同一员工只出现一次。对齐旧接口 `EntityID + PageNum + SearchKey + State + JobID`。
+
+功能权限：`org:employee:view` 或 `org:role:view`（满足其一，`storeCheck=false`）。用户权限页用角色查看权限即可拉脱敏员工列表。详情、修改、完整手机号权限不变。
 
 查询参数：
 
 ```Plain Text
-entityId     必填，组织单位 ID（旧 EntityID）
+entityId     必填，选中的组织单位 ID（含自身及全部下级）
 keyword      可选，姓名/手机号/员工编号/花名模糊（旧 SearchKey）
 jobId        可选，职务 ID（旧 JobID）
 state        可选，在职状态 true/false（旧 State）；不传不过滤
@@ -641,7 +643,8 @@ size         每页条数，默认 10，最大 100（旧 PageSize）
       "id": "6640",
       "name": "孙得川",
       "alias": "",
-      "phoneNumber": "15157126640",
+      "phoneNumber": "151****6640",
+      "maskedMobile": "151****6640",
       "jobId": 17,
       "jobName": "普通员工(公司)",
       "state": true,
@@ -669,6 +672,10 @@ size         每页条数，默认 10，最大 100（旧 PageSize）
 }
 ```
 
+列表和详情的 `phoneNumber`、`maskedMobile` 都是脱敏号：11 位保留前 3 后 4，例如 `13812341234` → `138****1234`。响应不含 `password` / `pwd` / `loginPassword`。
+
+`entityId` 会在服务端展开为该节点及全部下级。非全量数据权限时，只查询展开结果里当前账号可见的组织；展开后一个可见组织都没有则 `code=10003`。选中节点本身不在范围内、但其下级在范围内时，仍返回这些下级中的员工。
+
 ---
 
 # 73 查询员工详情✅️
@@ -677,7 +684,28 @@ size         每页条数，默认 10，最大 100（旧 PageSize）
 GET /api/v1/employees/{id}
 ```
 
-返回字段同列表单条 `records[]`（含所属组织 `entities`）。员工不存在时 `code=30001`。
+返回字段同列表单条 `records[]`（含所属组织 `entities`）。手机号同样只有脱敏值。员工不存在时 `code=30001`。无该员工数据权限时 `code=10003`。
+
+---
+
+# 73b 查看员工完整手机号
+
+```HTTP
+GET /api/v1/employees/{id}/mobile
+```
+
+权限：`employee:mobile:view_full`（写入既有 `TB_MenuPermission`，不新增权限表）。这是查看完整号码的明确操作。没有该权限时，详情接口也不返回完整号码。
+
+返回 data：
+
+```JSON
+{
+  "employeeId": "6640",
+  "phoneNumber": "15157126640"
+}
+```
+
+无权限 `code` 为无操作权限；员工不在数据范围内 `code=10003`。不提供 `password:view`，也没有单独的重置密码接口。新增/修改请求里的 `password` 只用于写入 MD5，响应不回传。
 
 ---
 
@@ -701,11 +729,15 @@ POST /api/v1/employees
   "idNumber": "",
   "address": "",
   "entryDate": "2023-02-01",
+  "birthdate": null,
+  "trialExpiryDate": null,
   "contractStartDate": null,
   "contractEndDate": null,
+  "socialSecurityPaymentDate": null,
   "remark": null,
   "password": "123456",
-  "state": true
+  "state": true,
+  "entityIds": [35]
 }
 ```
 
@@ -718,10 +750,14 @@ POST /api/v1/employees
 | phoneNumber       | string  | 是   | 手机号，全局唯一                |
 | gender            | string  | 否   | 1 男 / 2 女 / 0 未知        |
 | jobId             | int     | 是   | 职务 ID                   |
-| entityId          | int     | 是   | 所属组织单位（主组织）             |
+| entityId          | int     | 是   | 主组织                         |
+| entityIds         | int[]   | 否   | 所属组织全集；不传则只绑定 entityId。entityId 必须包含在最终归属里 |
 | idNumber          | string  | 否   | 证件号码                    |
 | address           | string  | 否   | 地址                      |
 | entryDate         | date    | 否   | 入职日期 yyyy-MM-dd         |
+| birthdate         | date    | 否   | 出生日期                    |
+| trialExpiryDate   | date    | 否   | 试用期到期日                  |
+| socialSecurityPaymentDate | date | 否 | 社保缴纳日期              |
 | contractStartDate | date    | 否   | 合同开始                    |
 | contractEndDate   | date    | 否   | 合同结束                    |
 | remark            | string  | 否   | 备注                      |
@@ -753,11 +789,14 @@ PUT /api/v1/employees/{id}
   "address": "",
   "entryDate": "2023-02-01",
   "birthdate": null,
+  "trialExpiryDate": null,
   "contractStartDate": null,
   "contractEndDate": null,
+  "socialSecurityPaymentDate": null,
   "remark": null,
   "state": true,
-  "password": null
+  "password": null,
+  "entityIds": [35]
 }
 ```
 
@@ -769,7 +808,8 @@ PUT /api/v1/employees/{id}
 | phoneNumber                                                     | string  | 是   | 手机号                   |
 | gender                                                          | string  | 否   | 性别                    |
 | jobId                                                           | int     | 是   | 职务                    |
-| entityId                                                        | int     | 是   | 主组织；仅调整主门店标记，保留其它跨店关系 |
+| entityId                                                        | int     | 是   | 主组织 |
+| entityIds                                                       | int[]   | 否   | 不传则只调整主组织并保留原归属；传入后同步数据范围内的归属，范围外的归属保留 |
 | idNumber / address / entryDate / birthdate / contract* / remark |         | 否   | 同新增                   |
 | state                                                           | boolean | 是   | 是否在职                  |
 | password                                                        | string  | 否   | 传入则重置密码（MD5）          |
@@ -855,7 +895,43 @@ Authorization: Bearer {token}
 
 返回：同 715A（含 `resolvedOrgEntityIds` / `resolvedStoreIds`）。展开后无门店时 `code=10000`。
 
-生效：下次请求即可。登录默认上次切店；查其它门店顾客须先 `switch-store`，可切列表以 `storeIds` 为准。
+生效：下次请求即可。登录默认上次切店；查其它门店顾客须先 `switch-store`，可切列表以 `storeIds` 为准。页面提示员工重新登录后，菜单与默认门店才会按新配置刷新。
+
+---
+
+# 715C 批量配置员工角色与组织数据范围
+
+```HTTP
+POST /api/v1/employees/role-access/batch
+```
+
+请求头（必填）：
+
+```PlainText
+Authorization: Bearer {token}
+```
+
+功能权限：`org:role:edit`（`storeCheck=false`）。
+
+用同一套角色和组织范围覆盖多名员工。与单人接口同一事务语义：任一人校验失败（员工不存在、角色不存在、组织不存在、展开后没有门店）则整批回滚。不修改人事 `JobID`。
+
+请求：
+
+```JSON
+{
+  "employeeIds": ["10001", "6640"],
+  "jobTypeIds": [1],
+  "orgEntityIds": [1003]
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| employeeIds | string[] | 是 | 员工 ID，去重后 1～100 人 |
+| jobTypeIds | int[] | 是 | 权限角色，至少一项 |
+| orgEntityIds | int[] | 是 | 组织范围，至少一项；勾选上级自动含下级全部组织/门店 |
+
+返回 `data` 为实际写入人数。空列表或超过 100 人时 `code=10000`。
 
 > V1（CONF-039）：系统角色 `TB_Role` **冻结管理写接口**；配置主路径为 JobType + `role-access`。登录仍可合并系统角色权限码（兼容旧数据）。
 
@@ -883,7 +959,7 @@ keyword    可选；按员工姓名或员工编号模糊匹配（任一命中即
     "employeeId": "6640",
     "name": "孙得川",
     "alias": "",
-    "phoneNumber": "15157126640",
+    "phoneNumber": "151****6640",
     "jobId": 17,
     "jobName": "普通员工(公司)",
     "state": true,
@@ -945,6 +1021,8 @@ GET /api/v1/job-types
 ```Plain Text
 Authorization: Bearer {token}
 ```
+
+功能权限：`org:job:view` 或 `org:role:view`（满足其一）。新增、修改、删除职务仍只要 `org:job:edit`。
 
 查询参数：
 
@@ -1282,10 +1360,15 @@ Authorization: Bearer {token}
   "name": "杭州B店",
   "store": true,
   "warehouse": false,
-  "provinceCode": "330000",
-  "cityCode": "330100",
-  "areaCode": "330106",
-  "addressDetail": "西湖区文三路 100 号"
+  "provinceCode": "33",
+  "cityCode": "3301",
+  "areaCode": "330102",
+  "addressDetail": "和兴路129号",
+  "longitude": 120.212600,
+  "latitude": 30.291000,
+  "active": true,
+  "remark": null,
+  "priceAreaId": null
 }
 ```
 
@@ -1296,10 +1379,15 @@ Authorization: Bearer {token}
 | name          | string  | 是   | 单位名称，最长 50；同一上级下不可重名                 |
 | store         | boolean | 是   | 是否门店                                 |
 | warehouse     | boolean | 是   | 是否仓库                                 |
-| provinceCode  | string  | 否   | 地址-省编码                               |
-| cityCode      | string  | 否   | 地址-市编码                               |
-| areaCode      | string  | 否   | 地址-区编码                               |
+| provinceCode  | string  | 否   | 省编码。级联值为 2 位，如 `33`                  |
+| cityCode      | string  | 否   | 市编码。级联值为 4 位，如 `3301`               |
+| areaCode      | string  | 否   | 区编码。级联值为 6 位，如 `330102`             |
 | addressDetail | string  | 否   | 详细地址，最长 200                          |
+| longitude     | number  | 否   | 经度                                    |
+| latitude      | number  | 否   | 纬度                                    |
+| active        | boolean | 否   | 是否有效，不传默认 true                        |
+| remark        | string  | 否   | 备注，最长 200                             |
+| priceAreaId   | int     | 否   | 价格区域，门店信息                             |
 
 
 业务：
@@ -1309,7 +1397,7 @@ Authorization: Bearer {token}
  ↓
 同级名称去重
  ↓
-生成 ID / Sequence，Active=true
+生成 ID / Sequence；active 不传则为 true
  ↓
 写入 TK_Entity
 ```
@@ -1359,11 +1447,15 @@ Authorization: Bearer {token}
   "name": "杭州B店",
   "store": true,
   "warehouse": false,
-  "provinceCode": "330000",
-  "cityCode": "330100",
-  "areaCode": "330106",
-  "addressDetail": "西湖区文三路 100 号",
-  "active": true
+  "provinceCode": "33",
+  "cityCode": "3301",
+  "areaCode": "330102",
+  "addressDetail": "和兴路129号",
+  "longitude": 120.212600,
+  "latitude": 30.291000,
+  "active": true,
+  "remark": null,
+  "priceAreaId": 1
 }
 ```
 
@@ -1374,11 +1466,15 @@ Authorization: Bearer {token}
 | name          | string  | 是   | 单位名称，最长 50；同一上级下不可与其它单位重名           |
 | store         | boolean | 是   | 是否门店                                |
 | warehouse     | boolean | 是   | 是否仓库                                |
-| provinceCode  | string  | 否   | 地址-省编码                              |
-| cityCode      | string  | 否   | 地址-市编码                              |
-| areaCode      | string  | 否   | 地址-区编码                              |
+| provinceCode  | string  | 否   | 省编码                                 |
+| cityCode      | string  | 否   | 市编码                                 |
+| areaCode      | string  | 否   | 区编码                                 |
 | addressDetail | string  | 否   | 详细地址，最长 200                         |
+| longitude     | number  | 否   | 经度；传 null 会清空                       |
+| latitude      | number  | 否   | 纬度；传 null 会清空                       |
 | active        | boolean | 是   | 是否有效                                |
+| remark        | string  | 否   | 备注，最长 200；传 null 会清空                |
+| priceAreaId   | int     | 否   | 价格区域；不传则保留原值                        |
 
 
 返回：更新后的组织对象（同新增接口 `data` 结构）。组织不存在、上级非法或同级重名时 `code=10000`。
@@ -1390,6 +1486,8 @@ Authorization: Bearer {token}
 ```HTTP
 GET /api/v1/organizations
 ```
+
+权限：`org:store:view`、`org:employee:view` 或 `org:role:view`（满足其一）。通讯录用员工查看权限、用户权限页用角色查看权限即可加载组织树。新增、修改组织仍要 `org:store:edit`。
 
 请求头（必填）：
 
@@ -4425,7 +4523,7 @@ GET /api/v1/performance/guests
 
 ---
 
-# 224 计算员工月度提成
+# 224 计算员工月度提成（C2 已实现 ✅️）
 
 ```HTTP
 POST /api/v1/commissions/calculate
@@ -4437,7 +4535,7 @@ POST /api/v1/commissions/calculate
 
 ```JSON
 {
-  "month": "2026-08",
+  "month": "2026-10",
   "storeId": 1001
 }
 ```
@@ -4446,52 +4544,227 @@ POST /api/v1/commissions/calculate
 
 ```JSON
 {
-  "month": "2026-08",
+  "month": "2026-10",
   "storeId": 1001,
-  "saleLineCount": 12,
-  "treatLineCount": 8,
+  "saleLineCount": 148,
+  "treatLineCount": 15,
   "employees": [
     {
-      "employeeId": "E001",
-      "saleCommission": 120.50,
-      "treatCommission": 80.00,
-      "totalCommission": 200.50
+      "employeeId": "10001",
+      "saleBase": 96730.00,
+      "saleCommission": 4581.95,
+      "treatBase": 19386.00,
+      "treatCommission": 969.30,
+      "totalCommission": 5551.25
     }
-  ]
+  ],
+  "details": [ ... 计算解释明细（同 224d 字段） ... ]
 }
 ```
 
-内部（V1，CONF-027～037）：
+内部（C2 冻结口径，全链 **0 DDL** 直连物理表）：
 
 ```Plain Text
-读取本月已支付且未整单退款的销售项目经手人行（× Handler.Scale）
+删同月门店提成快照月窗（普通结果表 + 套餐来源划卡结果表）
  ↓
-匹配销售提成规则（HandlerJobType > Handler > Project > Scheme；无阶梯）
+销售各族（项目/产品/储值/次卡/时效）：TB_SaleEntityPerformance* 资金桶 × Scale
+  单据状态：已支付 / 部分退款 / 退款申请中；已退款整单不进
+  已审批退款按品类+销售行冲减对应桶（行号跨品类不混用）
  ↓
-读取本月已完成耗卡项目经手人行；按员工月耗卡业绩匹配 TK_EmployeeCommission 阶梯
+套餐：母套餐规则一次（5 子业绩表 UNION；Rate 按子行求和；Fixed 每母行×经手×桶一次）
  ↓
-删除同月门店项目提成快照后重写（同月可覆盖；V1 无 approve/settle）
+TREAT PROJECT：月阶梯 TK_EmployeeCommission（普通来源写 Project 结果表；套餐来源写 PackageCardProject 结果表，互斥）
  ↓
-返回员工汇总
+TREAT 3 卡族：业绩桶 × Scale；套餐来源同样只写 PackageCard 结果表
+ ↓
+四级链 resolve（职务来自 TK_Employee.JobID；HJT > HANDLER > ITEM > SCHEME；无命中=0，不回退项目费率）
+ ↓
+重写快照（SpecialBenefit=0；全 0 行不落快照）→ 查询层 UNION 普通结果与套餐来源结果
 ```
 
-> V1 **不做**客流提成；**不做** `approve` / `settle`。
+> 提成基数 = 资金桶业绩 × 经手人 `Scale`；桶基数 ≤ 0 时该桶提成和 Fixed 都为 0，桶基数 > 0 时提成 = 基数 × rate + fixed。
+> 同月重复 calculate **幂等**。**不做**客流提成，**不做** `approve` / `settle`。
+> Commission 只读退款，不改 Sale/Treat/Refund。全额退款提成为 0；部分退款只冲已退部分。
+> 套餐母户不能单独退。套餐部分退款走子权益，按母账户 + 品项唯一对应到该子销售行，再按该行自己的数量或金额占比冲它的业绩桶。
+> 已审批退款无法回到原销售行时，preview / calculate / 月汇总都返回 `anomalies`。这些销售单不写入提成快照，其他销售单照常计算。提示文案：「存在无法匹配原销售行的退款，提成无法准确计算」。
 
 ---
 
-# 224b 查询员工月度提成
+# 224b 试算（不落库） ✅️
 
 ```HTTP
-GET /api/v1/commissions?month=2026-08&storeId=1001
+POST /api/v1/commissions/preview
+```
+
+权限：`commission:view`
+
+请求/响应同 224；`persist=false`，不写任何快照；明细含全 0 行（如时效划卡 0 值员工）。
+
+---
+
+# 224c 查询员工月度提成快照 ✅️
+
+```HTTP
+GET /api/v1/commissions?month=2026-10&storeId=1001
 ```
 
 权限：`commission:view`（门店校验）
 
-响应结构与 calculate 的 `employees` 汇总相同（不含本次批算行数时可视为快照查询）。
+响应结构与 calculate 的 `employees` 汇总相同（快照读取；全 0 员工行不落快照）。
 
 ---
 
-# 二十三、绩效审核
+# 224d 提成计算解释明细 ✅️
+
+```HTTP
+GET /api/v1/commissions/details?month=2026-10&storeId=1001&employeeId=10001
+```
+
+权限：`commission:view`；`employeeId?` 可选过滤。
+
+响应 `data`：明细行数组，每行 = 一笔业务单据 × 员工：
+
+```JSON
+{
+  "category": "PROJECT_SALE",
+  "categoryLabel": "项目销售",
+  "billId": "XS202610120027",
+  "billDate": "2026-10-12",
+  "itemId": 1,
+  "itemName": "…",
+  "masterItemName": null,
+  "employeeId": "10001",
+  "scale": 1.0,
+  "ruleModel": "CHAIN",
+  "ruleLevel": "ITEM",
+  "ruleDesc": "四级链匹配（商品/卡项）：项目销售「…」 PayRate 5% PayFixed ¥0.00",
+  "parts": [
+    { "bucket": "PAY", "bucketLabel": "支付业绩", "base": 199.00,
+      "rate": 0.05, "fixed": 0, "rateAmount": 9.95, "fixedAmount": 0, "amount": 9.95 }
+  ],
+  "totalAmount": 9.95
+}
+```
+
+`ruleModel`：CHAIN（四级链）/ TIER（月阶梯）。`parts` 只包含该品类真实存在的资金桶。项目/产品/次卡/时效销售为 Pay、储值本金、储值赠送三桶；储值卡销售只有 Pay 桶；划卡卡族按业绩表真实列。套餐来源划卡明细带 `masterItemId` / `masterItemName`，且只出现在套餐来源结果里，不与普通结果重复。
+
+---
+
+# 224e 提成规则元数据 ✅️
+
+```HTTP
+GET /api/v1/commission-rules/meta            # 全部 10 族（含 PRODUCT_TREAT 占位，meta 用于前端隐藏）
+GET /api/v1/commission-rules/meta/one?scene=SALE&itemType=PROJECT
+```
+
+权限：`commission:rule:view`
+
+Query：`scene?`（SALE/TREAT）、`itemType?`（PROJECT/PRODUCT/SAVING_CARD/GENERAL_CARD/TIME_CARD/PACKAGE_CARD）。
+
+响应 `data`（单族）：
+
+```JSON
+{
+  "scene": "SALE",
+  "itemType": "PROJECT",
+  "model": "CHAIN",
+  "levels": ["HANDLER_JOB_TYPE", "HANDLER", "ITEM", "SCHEME"],
+  "itemCatalogType": "TE_Project",
+  "handlerBizType": "PROJECT_SALE",
+  "buckets": [
+    { "code": "PAY", "label": "支付业绩" },
+    { "code": "SAVING_CARD", "label": "储值本金业绩" },
+    { "code": "SAVING_CARD_LARGESS", "label": "储值赠送业绩" }
+  ]
+}
+```
+
+`model=CHAIN` 四级链；`model=TIER`（仅 TREAT+PROJECT）月阶梯。**PRODUCT_TREAT 元数据请求返回业务错误（NOT_APPLICABLE：产品不参与划卡计提）**。
+
+---
+
+# 224f 提成规则 CRUD（四级链） ✅️
+
+```HTTP
+GET    /api/v1/commission-rules        # list（level/itemId/handlerRoleId/jobTypeId 过滤）
+GET    /api/v1/commission-rules/detail # 按同一组条件取一条；不存在或不唯一返回业务错误
+POST   /api/v1/commission-rules        # 新增或按主键覆盖
+PUT    /api/v1/commission-rules        # 只更新已存在的规则；不存在不插入
+DELETE /api/v1/commission-rules        # delete（按 PK）
+```
+
+权限：查看 `commission:rule:view`、写入 `commission:rule:edit`
+
+GET list / GET detail Query：`scene`、`itemType`、`level`、`storeId`、`itemId?`、`handlerRoleId?`、`jobTypeId?`
+
+规则表没有 Active 列，接口不提供启用/停用。职务匹配读 `TK_Employee.JobID`，不读 `TB_EmployeeJobType`。提交的桶必须是该品类真实字段，不允许把不存在的桶补成 0。
+
+POST/DELETE body（rates 为桶级列表；rate 0-9.9999、fixed 0-10^16，超出返回 PARAM 业务错误）：
+
+```JSON
+{
+  "scene": "SALE",
+  "itemType": "SAVING_CARD",
+  "level": "ITEM",
+  "storeId": 1001,
+  "itemId": 2,
+  "handlerRoleId": null,
+  "jobTypeId": null,
+  "rates": [
+    { "bucket": "PAY", "rate": 0.05, "fixed": 0 }
+  ]
+}
+```
+
+规则表无启停概念（真实旧结构语义）；`delete` 即停用，重算立即生效。
+桶伪造（family.hasBucket 校验失败）返回 PARAM 业务错误。
+
+---
+
+# 224g 划卡项目月阶梯方案 CRUD ✅️
+
+```HTTP
+GET    /api/v1/commission-rules/tier-schemes?storeId=1001     # list（含档位）
+POST   /api/v1/commission-rules/tier-schemes                   # create（active 默认 true）
+DELETE /api/v1/commission-rules/tier-schemes/{id}              # delete（级联删档位+门店绑定）
+PUT    /api/v1/commission-rules/tier-schemes/{id}/state        # active 开关
+```
+
+权限：查看 `commission:rule:view`、写入 `commission:rule:edit`
+
+scheme body：`{ "storeId": 1001, "name": "C2制式阶梯方案", "active": true }`
+方案 ID 后端 MAX+1 生成；同店多方案仅 `active=1` 参与计算；删除级联（方案+档位+TK_EmployeeCommissionEntity 绑定）。
+
+---
+
+# 224h 阶梯档位 CRUD ✅️
+
+```HTTP
+POST   /api/v1/commission-rules/tiers
+DELETE /api/v1/commission-rules/tiers/{id}
+```
+
+权限：`commission:rule:edit`
+
+body：
+
+```JSON
+{
+  "id": null,
+  "schemeId": 1,
+  "beginPerformance": 5000,
+  "endPerformance": null,
+  "rate": 0.08,
+  "fixed": 0
+}
+```
+
+`endPerformance=null`（或 ≤ begin）落库为 `end=begin`（NOT NULL 列的无上界表达）；读回 VO 时 `end<=begin` 还原为 `null`；区间重叠校验失败返回 PARAM 业务错误。
+
+---
+
+# 二十三、绩效审核（未实现）
+
 
 ```HTTP
 POST /api/v1/commissions/{id}/approve
@@ -5064,6 +5337,7 @@ POST /api/v1/employees
 PUT /api/v1/employees/{id}
 GET /api/v1/employees/{id}/role-access
 PUT /api/v1/employees/{id}/role-access
+POST /api/v1/employees/role-access/batch
 GET /api/v1/job-types
 GET /api/v1/job-types/{id}
 POST /api/v1/job-types

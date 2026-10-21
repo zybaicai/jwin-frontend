@@ -32,8 +32,9 @@ import SavingCardDiscountManageView from '@/views/goods/SavingCardDiscountManage
 import PackageCardManageView from '@/views/goods/PackageCardManageView.vue'
 import ConsumableCategoryManageView from '@/views/goods/ConsumableCategoryManageView.vue'
 import ConsumableTemplateManageView from '@/views/goods/ConsumableTemplateManageView.vue'
-import UnderConstructionView from '@/views/common/UnderConstructionView.vue'
-import OrgStructureView from '@/views/hr/OrgStructureView.vue'
+import CommissionCalcView from '@/views/hr/CommissionCalcView.vue'
+import SaleCommissionRulesView from '@/views/hr/SaleCommissionRulesView.vue'
+import TreatCommissionRulesView from '@/views/hr/TreatCommissionRulesView.vue'
 import EmployeeDirectoryView from '@/views/hr/EmployeeDirectoryView.vue'
 import CrossStoreEmployeeView from '@/views/hr/CrossStoreEmployeeView.vue'
 import JobTypeManageView from '@/views/hr/JobTypeManageView.vue'
@@ -508,17 +509,7 @@ const router = createRouter({
         },
         {
           path: 'hr/org',
-          name: 'hr-org',
-          component: OrgStructureView,
-          meta: {
-            requiresAuth: true,
-            title: '组织架构',
-            keepAlive: true,
-            breadcrumb: true,
-            tabClosable: true,
-            workspaceTab: true,
-            permission: 'org:store:view',
-          },
+          redirect: '/hr/employees',
         },
         {
           path: 'hr/employees',
@@ -649,7 +640,7 @@ const router = createRouter({
         {
           path: 'hr/sale-commission-rules',
           name: 'hr-sale-commission-rules',
-          component: UnderConstructionView,
+          component: SaleCommissionRulesView,
           meta: {
             requiresAuth: true,
             title: '销售提成规则',
@@ -663,7 +654,7 @@ const router = createRouter({
         {
           path: 'hr/treat-commission-rules',
           name: 'hr-treat-commission-rules',
-          component: UnderConstructionView,
+          component: TreatCommissionRulesView,
           meta: {
             requiresAuth: true,
             title: '划卡提成规则',
@@ -677,7 +668,7 @@ const router = createRouter({
         {
           path: 'hr/commission-calc',
           name: 'hr-commission-calc',
-          component: UnderConstructionView,
+          component: CommissionCalcView,
           meta: {
             requiresAuth: true,
             title: '提成计算',

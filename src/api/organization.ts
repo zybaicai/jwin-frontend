@@ -8,8 +8,17 @@ export interface OrganizationTreeNode {
   entityName: string | null
   parentId: number | null
   store: boolean | null
+  warehouse?: boolean | null
+  provinceCode?: string | null
+  cityCode?: string | null
+  areaCode?: string | null
+  addressDetail?: string | null
+  longitude?: number | null
+  latitude?: number | null
   active: boolean | null
   sequence: number | null
+  remark?: string | null
+  priceAreaId?: number | null
   children: OrganizationTreeNode[]
 }
 
