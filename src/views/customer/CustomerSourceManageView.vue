@@ -309,12 +309,6 @@ watch(
 
 <template>
   <section class="source-manage">
-    <header class="page-header">
-      <div>
-        <h1>客户来源管理</h1>
-        <p class="subtitle">维护客户首次信息来源；建档下拉仅展示启用项</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

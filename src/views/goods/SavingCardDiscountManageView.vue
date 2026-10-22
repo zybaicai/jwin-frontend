@@ -305,12 +305,6 @@ watch(
 
 <template>
   <section class="card-manage">
-    <header class="page-header">
-      <div>
-        <h1>储值区域折扣</h1>
-        <p class="subtitle">价格区域 × 项目 × 折扣率；同区域同项目有效期禁止重叠</p>
-      </div>
-    </header>
 
     <AppError v-if="optionsError" :description="optionsError" @retry="loadOptions" />
 

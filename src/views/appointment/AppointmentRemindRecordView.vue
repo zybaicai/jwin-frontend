@@ -145,12 +145,6 @@ onUnmounted(() => {
 <template>
   <div class="page">
     <header class="page-header">
-      <div>
-        <h1>提醒记录</h1>
-        <p class="desc">
-          查看本店预约提醒任务与发送结果。未配置短信/小程序时状态为「待配置渠道」，不会显示虚假成功。
-        </p>
-      </div>
       <el-button
         v-if="canEdit"
         type="primary"

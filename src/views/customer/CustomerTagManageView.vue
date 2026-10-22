@@ -193,12 +193,6 @@ watch(
 
 <template>
   <section class="tag-manage">
-    <header class="page-header">
-      <div>
-        <h1>客户标签管理</h1>
-        <p class="subtitle">维护系统标签库；客户贴标在客户详情中操作</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

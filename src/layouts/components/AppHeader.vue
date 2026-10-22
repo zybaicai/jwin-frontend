@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import AppBreadcrumb from '@/layouts/components/AppBreadcrumb.vue'
 import AppStoreSelector from '@/layouts/components/AppStoreSelector.vue'
+import AppTopNav from '@/layouts/components/AppTopNav.vue'
 import AppUserDropdown from '@/layouts/components/AppUserDropdown.vue'
 
 defineProps<{
@@ -22,7 +22,7 @@ const emit = defineEmits<{
     >
       ☰
     </el-button>
-    <AppBreadcrumb />
+    <AppTopNav />
     <div class="header-actions">
       <AppStoreSelector />
       <AppUserDropdown />
@@ -34,17 +34,18 @@ const emit = defineEmits<{
 .header {
   display: flex;
   flex: 0 0 48px;
-  align-items: center;
+  align-items: stretch;
   height: 48px;
   min-width: 0;
-  padding: 0 12px;
-  gap: 12px;
+  padding: 0 12px 0 4px;
+  gap: 4px;
   border-bottom: 1px solid #e4e7ed;
   background: #fff;
 }
 
 .collapse-btn {
   flex: 0 0 auto;
+  align-self: center;
   font-size: 18px;
 }
 
@@ -52,6 +53,7 @@ const emit = defineEmits<{
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  align-self: center;
   gap: 16px;
   margin-left: auto;
 }

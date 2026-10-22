@@ -210,14 +210,6 @@ watch(
 
 <template>
   <section class="role-permission">
-    <header class="page-header">
-      <div>
-        <h1>角色权限</h1>
-        <p class="subtitle">
-          此处为「权限角色」绑定（职务作为角色载体），与人事职务档案共用 TK_JobType
-        </p>
-      </div>
-    </header>
 
     <el-alert
       type="info"

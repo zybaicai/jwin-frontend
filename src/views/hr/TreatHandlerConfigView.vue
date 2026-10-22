@@ -208,14 +208,6 @@ watch([activeBiz, storeId], () => void loadList())
 
 <template>
   <section class="treat-handler-config">
-    <header class="page-header">
-      <div>
-        <h1>消耗经手配置</h1>
-        <p class="subtitle">
-          当前门店：{{ storeStore.currentStoreName || (storeId != null ? `#${storeId}` : '未选择') }}
-        </p>
-      </div>
-    </header>
 
     <el-alert
       type="warning"

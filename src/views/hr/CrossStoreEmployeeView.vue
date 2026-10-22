@@ -162,12 +162,6 @@ watch([storeId, hasViewPermission], () => void loadList(), { immediate: true })
 
 <template>
   <section class="cross-store-employee">
-    <header class="page-header">
-      <div>
-        <h1>跨店员工</h1>
-        <p class="subtitle">维护可在本店开单/服务的跨店人员；主店归属不可在此移除</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

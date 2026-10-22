@@ -4,10 +4,12 @@ import { reactive, ref, watch } from 'vue'
 import AppError from '@/components/common/AppError.vue'
 import {
   createCustomer,
+  fetchCustomerCreateSchema,
   fetchCustomerPage,
   fetchCustomerSourceOptions,
   fetchServicerOptions,
 } from '@/api/customer'
+import type { CustomerCreateFieldSchema } from '@/types/customer'
 import type { CustomerListItem, CustomerSourceOption } from '@/types/customer'
 import { getUserFriendlyErrorMessage, notifyError, runExclusive, uiMessage } from '@/utils/ui'
 import {
@@ -36,6 +38,7 @@ const optionsError = ref<string | null>(null)
 const sourceOptions = ref<CustomerSourceOption[]>([])
 const nurseOptions = ref<{ id: string; name: string }[]>([])
 
+const createSchema = ref<CustomerCreateFieldSchema[]>([])
 const introducerOptions = ref<CustomerListItem[]>([])
 const introducerSearching = ref(false)
 const introducerSearchError = ref<string | null>(null)
@@ -53,6 +56,17 @@ const form = reactive({
   nurseEmployeeId: '' as string,
   introducerCustomerId: undefined as number | undefined,
 })
+
+const ALWAYS_REQUIRED = new Set(['name', 'mobile'])
+
+function fieldRequired(code: string): boolean {
+  if (ALWAYS_REQUIRED.has(code)) return true
+  const hit = createSchema.value.find((item) => item.fieldCode === code)
+  if (!hit) return false
+  if (hit.requirement === 'SYSTEM_REQUIRED' || hit.requirement === 'REQUIRED') return true
+  if (hit.requirement === 'OPTIONAL') return false
+  return hit.required === true
+}
 
 function resetForm(): void {
   form.name = ''
@@ -77,10 +91,12 @@ async function loadOptions(): Promise<void> {
   loadingOptions.value = true
   optionsError.value = null
   try {
-    const [sources, roles] = await Promise.all([
+    const [schema, sources, roles] = await Promise.all([
+      fetchCustomerCreateSchema().catch(() => [] as CustomerCreateFieldSchema[]),
       fetchCustomerSourceOptions(),
       fetchServicerOptions(),
     ])
+    createSchema.value = schema
     sourceOptions.value = sources.filter((item) => item.active !== false)
     nurseOptions.value = pickMainNurseEmployees(roles).map((emp) => ({
       id: emp.id,
@@ -139,8 +155,18 @@ async function runIntroducerSearch(keyword: string): Promise<void> {
 }
 
 async function handleSubmit(): Promise<void> {
-  if (!form.name.trim() || !form.mobile.trim() || form.sourceId == null) {
-    uiMessage.warning('请填写姓名、手机号和首次来源')
+  const missing: string[] = []
+  if (fieldRequired('name') && !form.name.trim()) missing.push('姓名')
+  if (fieldRequired('mobile') && !form.mobile.trim()) missing.push('手机号')
+  if (fieldRequired('gender') && !form.gender) missing.push('性别')
+  if (fieldRequired('sourceId') && form.sourceId == null) missing.push('首次来源')
+  if (fieldRequired('birthday') && !form.birthday) missing.push('生日')
+  if (fieldRequired('introducerCustomerId') && form.introducerCustomerId == null) missing.push('介绍人')
+  if (fieldRequired('nurseEmployeeId') && !form.nurseEmployeeId) missing.push('主护理师')
+  if (fieldRequired('address') && !form.address.trim()) missing.push('地址')
+  if (fieldRequired('remark') && !form.remark.trim()) missing.push('备注')
+  if (missing.length > 0) {
+    uiMessage.warning(`请填写${missing.join('、')}`)
     return
   }
   await runExclusive(saving, async () => {
@@ -207,20 +233,20 @@ watch(visible, (open) => {
       label-width="100px"
       @submit.prevent
     >
-      <el-form-item label="姓名" required>
+      <el-form-item label="姓名" :required="fieldRequired('name')">
         <el-input v-model="form.name" maxlength="50" placeholder="客户姓名" />
       </el-form-item>
-      <el-form-item label="手机号" required>
+      <el-form-item label="手机号" :required="fieldRequired('mobile')">
         <el-input v-model="form.mobile" maxlength="20" placeholder="手机号" />
       </el-form-item>
-      <el-form-item label="性别" required>
+      <el-form-item label="性别" :required="fieldRequired('gender')">
         <el-radio-group v-model="form.gender">
           <el-radio value="1">男</el-radio>
           <el-radio value="2">女</el-radio>
           <el-radio value="0">未知</el-radio>
         </el-radio-group>
       </el-form-item>
-      <el-form-item label="首次来源" required>
+      <el-form-item label="首次来源" :required="fieldRequired('sourceId')">
         <el-select v-model="form.sourceId" filterable placeholder="请选择" style="width: 100%">
           <el-option
             v-for="item in sourceOptions"
@@ -230,7 +256,7 @@ watch(visible, (open) => {
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="介绍人">
+      <el-form-item label="介绍人" :required="fieldRequired('introducerCustomerId')">
         <el-select
           v-model="form.introducerCustomerId"
           filterable
@@ -257,7 +283,7 @@ watch(visible, (open) => {
           输入关键字搜索本店可见客户
         </p>
       </el-form-item>
-      <el-form-item label="主护理师">
+      <el-form-item label="主护理师" :required="fieldRequired('nurseEmployeeId')">
         <el-select
           v-model="form.nurseEmployeeId"
           clearable
@@ -273,7 +299,7 @@ watch(visible, (open) => {
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="生日">
+      <el-form-item label="生日" :required="fieldRequired('birthday')">
         <el-date-picker
           v-model="form.birthday"
           type="date"
@@ -282,10 +308,10 @@ watch(visible, (open) => {
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="地址">
+      <el-form-item label="地址" :required="fieldRequired('address')">
         <el-input v-model="form.address" maxlength="200" placeholder="可选" />
       </el-form-item>
-      <el-form-item label="备注">
+      <el-form-item label="备注" :required="fieldRequired('remark')">
         <el-input
           v-model="form.remark"
           type="textarea"

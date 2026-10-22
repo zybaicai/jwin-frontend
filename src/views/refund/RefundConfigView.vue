@@ -73,11 +73,6 @@ onMounted(() => {
 
 <template>
   <div class="page">
-    <h3 class="title">退款配置（预留）</h3>
-    <p class="desc">
-      审批复用组织配置表 <code>TB_ErpApprovalRoleConfig</code>，BizType=<code>REFUND</code>。
-      未配置或未命中时不可审批；不新建退款审批人员表。
-    </p>
 
     <div v-loading="loading" class="card">
       <el-form label-width="140px" style="max-width: 480px">

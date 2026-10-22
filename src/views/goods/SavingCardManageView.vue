@@ -485,12 +485,6 @@ onActivated(() => {
 
 <template>
   <section class="card-manage">
-    <header class="page-header">
-      <div>
-        <h1>储值卡</h1>
-        <p class="subtitle">本金/赠金分列；销售与消耗适用门店及本金/赠金商品范围由商品管理员维护</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

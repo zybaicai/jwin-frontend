@@ -168,6 +168,18 @@ export const useTabsStore = defineStore('tabs', () => {
     }
   }
 
+  function moveTab(fromKey: string, toKey: string): void {
+    if (fromKey === toKey) return
+    const from = tabs.value.findIndex((tab) => tab.key === fromKey)
+    const to = tabs.value.findIndex((tab) => tab.key === toKey)
+    if (from < 0 || to < 0) return
+    const next = tabs.value.slice()
+    const [moved] = next.splice(from, 1)
+    if (moved == null) return
+    next.splice(to, 0, moved)
+    tabs.value = next
+  }
+
   function clear(): void {
     tabs.value = [createHomeTab()]
     activeKey.value = HOME_PATH
@@ -189,6 +201,7 @@ export const useTabsStore = defineStore('tabs', () => {
     closeTabsToRight,
     closeAllTabs,
     refreshTab,
+    moveTab,
     clear,
   }
 })

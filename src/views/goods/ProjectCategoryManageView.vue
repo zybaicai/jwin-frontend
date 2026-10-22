@@ -238,12 +238,6 @@ watch(
 
 <template>
   <section class="category-manage">
-    <header class="page-header">
-      <div>
-        <h1>项目分类</h1>
-        <p class="subtitle">最多两级；停用后不可作为新项目分类选项</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

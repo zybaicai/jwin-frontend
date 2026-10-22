@@ -566,12 +566,6 @@ onActivated(() => {
 
 <template>
   <section class="card-manage">
-    <header class="page-header">
-      <div>
-        <h1>套餐卡</h1>
-        <p class="subtitle">支持项目/产品/次卡/时效卡/储值卡子项；无消耗范围（后端无套餐 ConsumeEntity）</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

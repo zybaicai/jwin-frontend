@@ -933,12 +933,6 @@ watch(
 
 <template>
   <section class="project-manage">
-    <header class="page-header">
-      <div>
-        <h1>项目管理</h1>
-        <p class="subtitle">维护项目主数据与多渠道总部价；开单须配置有效渠道价，每个渠道可独立配置销售/消耗门店范围</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

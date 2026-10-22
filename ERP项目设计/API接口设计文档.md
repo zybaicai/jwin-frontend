@@ -2752,6 +2752,62 @@ DELETE /api/v1/customer-form-fields/{fieldCode}
 
 ---
 
+# 834A 创建客户档案必填配置
+
+```HTTP
+GET /api/v1/customer-profile-settings/create
+PUT /api/v1/customer-profile-settings/create
+```
+
+权限：`customer:form:view` / `customer:form:edit`，`storeCheck=false`。
+
+存储复用 `TB_ErpCustomerFormField`，不新建表。只覆盖创建客户（CREATE_CUSTOMER）这一场景。
+
+返回字段：`fieldCode`、`fieldName`、`requirement`、`remark`。
+
+`requirement`：`SYSTEM_REQUIRED`、`REQUIRED`、`OPTIONAL`。
+
+姓名、手机号码是 `SYSTEM_REQUIRED`（客户识别，且库列不能为空）。改成选填时 `code=10000`。
+
+性别库列不能为空，但已有合法值 `0`（未知），允许配置。信息来源列可空，允许配置。两者默认仍是必填，直到在页面改成选填。
+
+`PUT` 请求：
+
+```JSON
+{ "fields": [{ "fieldCode": "birthday", "requirement": "REQUIRED" }] }
+```
+
+创建客户 `POST /api/v1/customers` 会按当前配置校验。缺必填字段时 `code=10000`，例如「生日为必填项」。客户列表新增和预约快登都走这一个接口。
+
+---
+
+# 834B 入会门槛
+
+```HTTP
+GET /api/v1/customer-membership/entry-rule
+PUT /api/v1/customer-membership/entry-rule
+```
+
+权限：`customer:membership-entry:view` / `customer:membership-entry:edit`，`storeCheck=false`。
+
+存储复用空表 `TB_CustomerCondition`（`Type` + `Amount`，金额按分保存）、`TB_CustomerConditionGoodsType`、`TB_CustomerConditionGood`（`CustomerLevelID=0` 表示入会商品，不是等级升级商品）。
+
+`mode`：`NONE`、`FIRST_SALE`、`FIRST_TREAT`、`SINGLE_SALE_AMOUNT`、`TOTAL_SALE_AMOUNT`、`TOTAL_TREAT_AMOUNT`、`SALE_GOODS_TYPE`、`SALE_GOODS`。
+
+`SALE_GOODS_TYPE` 必须同时提交商品类型和金额。某一张原销售单里，所选类型任意一条明细自己的实付（NEW_MONEY，含补到该明细的欠款，不含储值本金和赠金）达到金额就入会。同一单的项目、产品或其他未选类型不计入这条金额，也不排除这张卡。已执行现金退款按该单实付比例从各条明细扣减。
+
+没有配置时按 `NONE`。保存只改规则，不重算历史客户。会员身份是 `TB_Customer.IsMember`，入会不自动写 `CustomerLevelID`。已经是会员的客户不会因为退款或取消消耗被改回非会员。
+
+销售实付优先取归到原销售单的 `TB_ErpSalePayAllocation.FundSource=NEW_MONEY`（`TargetType` 为 `NEW_SALE` 或 `ARREAR`，`TargetBillID` 为原销售单）。储值本金 `SAVING_PRINCIPAL`、赠金 `SAVING_BONUS` 不计。已执行退款的现金 `TB_RefundSaleBill.PayAmount` 从中扣减。没有分摊行的历史单，回退为头表 `PayAmount - CardDeductionAmount`：当前收款路径里 `CardDeductionAmount` 含储值本金和赠金，差额等于 `NEW_MONEY`。`BillType=补欠款` 不另算一笔销售。整单 `已退款` 净额为 0。0 元已支付销售算首次销售。
+
+会员资格可对单个客户重算：`POST /api/v1/customers/{id}/membership/re-evaluate`，权限 `customer:edit`，并校验该客户在当前数据范围内。已是会员的不降级、不改 `MemberOn`。未达门槛保持非会员。0 DDL。
+
+消费取 `TB_TreatBill` 状态 `1` 的 `PayAmount + CardDeductionAmount + LargessCardDeductionAmount`。取消（9）和已退款（2）不计。
+
+资格判断在销售收款、补欠款、消耗开单提交成功之后执行。判断失败只记日志，不回滚资金事务。
+
+---
+
 # 835 建档可选护理师（服务人员）
 
 ```HTTP

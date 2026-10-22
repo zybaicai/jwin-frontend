@@ -407,12 +407,6 @@ onActivated(() => {
 
 <template>
   <section class="card-manage">
-    <header class="page-header">
-      <div>
-        <h1>时效卡</h1>
-        <p class="subtitle">维护时效卡定义与项目范围；适用门店由商品管理员配置</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

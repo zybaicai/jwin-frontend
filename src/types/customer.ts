@@ -472,7 +472,49 @@ export const CustomerPermission = {
   LEVEL_VIEW: 'customer:level:view',
   LEVEL_EDIT: 'customer:level:edit',
   LEVEL_OVERRIDE: 'customer:level:override',
+  FORM_VIEW: 'customer:form:view',
+  FORM_EDIT: 'customer:form:edit',
+  MEMBERSHIP_ENTRY_VIEW: 'customer:membership-entry:view',
+  MEMBERSHIP_ENTRY_EDIT: 'customer:membership-entry:edit',
 } as const
+
+export interface CustomerProfileField {
+  fieldCode: string
+  fieldName: string
+  requirement: 'REQUIRED' | 'OPTIONAL' | 'SYSTEM_REQUIRED' | string
+  remark?: string | null
+}
+
+export interface CustomerCreateFieldSchema {
+  fieldCode: string
+  fieldName: string
+  visible?: boolean | null
+  required?: boolean | null
+  requirement?: string | null
+}
+
+export type MembershipEntryMode =
+  | 'NONE'
+  | 'FIRST_SALE'
+  | 'FIRST_TREAT'
+  | 'SINGLE_SALE_AMOUNT'
+  | 'TOTAL_SALE_AMOUNT'
+  | 'TOTAL_TREAT_AMOUNT'
+  | 'SALE_GOODS_TYPE'
+  | 'SALE_GOODS'
+
+export interface MembershipGoodsItem {
+  goodsType: string
+  goodsId: number
+  goodsName?: string | null
+}
+
+export interface MembershipEntryRule {
+  mode: MembershipEntryMode | string
+  amount?: number | null
+  goodsTypes?: string[]
+  goods?: MembershipGoodsItem[]
+}
 
 /** 对齐 CustomerLevelVo */
 export interface CustomerLevelItem {

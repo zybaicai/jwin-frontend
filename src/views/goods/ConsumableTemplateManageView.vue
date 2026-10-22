@@ -428,14 +428,6 @@ watch(
 
 <template>
   <section class="consumable-template-manage">
-    <header class="page-header">
-      <div>
-        <h1>耗材模板</h1>
-        <p class="subtitle">
-          项目耗材模板（产品为明细行）；列表按后端默认 id 降序，无 sortField
-        </p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

@@ -87,7 +87,7 @@ async function loadList(): Promise<void> {
   if (!hasViewPermission.value) {
     records.value = []
     total.value = 0
-    listError.value = '暂无权限查看会员等级（customer:level:view）'
+    listError.value = '暂无权限查看等级设置（customer:level:view）'
     return
   }
   await runExclusive(loading, async () => {
@@ -328,12 +328,6 @@ watch(
 
 <template>
   <section class="level-manage">
-    <header class="page-header">
-      <div>
-        <h1>会员等级</h1>
-        <p class="subtitle">维护等级名称、金额门槛与排序；当月累计耗卡达到门槛后自动匹配</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

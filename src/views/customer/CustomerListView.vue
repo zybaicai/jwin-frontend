@@ -431,9 +431,6 @@ onUnmounted(() => {
 
 <template>
   <div class="customer-list-page">
-    <header class="page-header">
-      <h1>客户管理</h1>
-    </header>
 
     <section class="query-panel">
       <div class="query-toolbar">

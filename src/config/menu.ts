@@ -13,6 +13,8 @@ export interface AppMenuItem {
   icon?: Component
   /** 仅叶子；有值时仅在拥有该权限时显示 */
   permission?: string
+  /** 只有分组标题、没有叶子。侧栏展示空状态，不进入路由。 */
+  placeholder?: boolean
   children?: AppMenuItem[]
 }
 
@@ -110,11 +112,36 @@ const IconHrPerf = menuIcon('IconHrPerf', () => [
   h('path', { d: 'M22 19 H2' }),
 ])
 
+/** 顶部一级业务中心。只做导航分组，不是权限码。 */
+export const BusinessCenter = {
+  STORE: 'STORE',
+  CUSTOMER: 'CUSTOMER',
+  HR: 'HR',
+  SUPPLY_CHAIN: 'SUPPLY_CHAIN',
+  REPORT: 'REPORT',
+} as const
+
+export type BusinessCenterId = (typeof BusinessCenter)[keyof typeof BusinessCenter]
+
+export interface BusinessCenterItem {
+  id: BusinessCenterId
+  title: string
+}
+
+export const businessCenters: BusinessCenterItem[] = [
+  { id: BusinessCenter.STORE, title: '店务管理' },
+  { id: BusinessCenter.CUSTOMER, title: '客户管理' },
+  { id: BusinessCenter.HR, title: '人事绩效' },
+  { id: BusinessCenter.SUPPLY_CHAIN, title: '供应链管理' },
+  { id: BusinessCenter.REPORT, title: '报表中心' },
+]
+
 /**
- * 静态菜单树。叶子 path 必须已在 router 注册。
+ * 各业务中心的侧栏菜单。叶子 path、permission 与改造前一致。
  * 父级无 permission；子项权限由 Sidebar 过滤。
  */
-export const appMenu: AppMenuItem[] = [
+export const menusByCenter: Record<BusinessCenterId, AppMenuItem[]> = {
+  [BusinessCenter.STORE]: [
   {
     path: '/',
     name: 'home',
@@ -122,8 +149,8 @@ export const appMenu: AppMenuItem[] = [
     icon: IconHome,
   },
   {
-    name: 'group-customers',
-    title: '客户管理',
+    name: 'group-store-customers',
+    title: '顾客管理',
     icon: IconCustomers,
     children: [
       {
@@ -131,24 +158,6 @@ export const appMenu: AppMenuItem[] = [
         name: 'customer-list',
         title: '客户列表',
         // 与改造前一致：菜单项不绑权限（页面内仍校验 customer:list:view）
-      },
-      {
-        path: '/customers/tags',
-        name: 'customer-tags',
-        title: '客户标签',
-        permission: 'customer:tag:view',
-      },
-      {
-        path: '/customers/sources',
-        name: 'customer-sources',
-        title: '客户来源',
-        permission: 'customer:source:view',
-      },
-      {
-        path: '/customers/levels',
-        name: 'customer-levels',
-        title: '会员等级',
-        permission: 'customer:level:view',
       },
     ],
   },
@@ -331,6 +340,60 @@ export const appMenu: AppMenuItem[] = [
       },
     ],
   },
+  ],
+  [BusinessCenter.CUSTOMER]: [
+    {
+      name: 'group-customer-settings',
+      title: '客户设置',
+      icon: IconCustomers,
+      children: [
+        {
+          path: '/customers/tags',
+          name: 'customer-tags',
+          title: '客户标签',
+          permission: 'customer:tag:view',
+        },
+        {
+          path: '/customers/sources',
+          name: 'customer-sources',
+          title: '客户来源',
+          permission: 'customer:source:view',
+        },
+        {
+          path: '/customers/profile-scenes',
+          name: 'customer-profile-scenes',
+          title: '档案应用场景',
+          permission: 'customer:form:view',
+        },
+      ],
+    },
+    {
+      name: 'group-customer-levels',
+      title: '会员等级',
+      icon: IconHrPerf,
+      children: [
+        {
+          path: '/customers/levels',
+          name: 'customer-levels',
+          title: '等级设置',
+          permission: 'customer:level:view',
+        },
+        {
+          path: '/customers/membership-entry',
+          name: 'customer-membership-entry',
+          title: '入会门槛',
+          permission: 'customer:membership-entry:view',
+        },
+      ],
+    },
+    {
+      name: 'group-customer-servicers',
+      title: '服务人员',
+      icon: IconHr,
+      placeholder: true,
+    },
+  ],
+  [BusinessCenter.HR]: [
   {
     name: 'group-hr-org',
     title: '组织人员',
@@ -431,32 +494,64 @@ export const appMenu: AppMenuItem[] = [
       },
     ],
   },
-]
+  ],
+  [BusinessCenter.SUPPLY_CHAIN]: [],
+  [BusinessCenter.REPORT]: [],
+}
+
+/** 全部侧栏节点，供按 path 反查归属。顺序与业务中心一致。 */
+export const appMenu: AppMenuItem[] = businessCenters.flatMap(
+  (center) => menusByCenter[center.id],
+)
 
 export interface MenuCrumb {
   title: string
 }
 
-/** 按当前 path 解析「分组 / 叶子」面包屑；未命中返回空 */
-export function findMenuBreadcrumb(path: string): MenuCrumb[] {
-  for (const item of appMenu) {
+function walkMenu(
+  items: AppMenuItem[],
+  path: string,
+  parents: AppMenuItem[],
+): { item: AppMenuItem; parents: AppMenuItem[] } | null {
+  for (const item of items) {
     if (item.children && item.children.length > 0) {
-      const child = item.children.find((c) => c.path === path)
-      if (child) {
-        return [{ title: item.title }, { title: child.title }]
-      }
-    } else if (item.path === path) {
-      return [{ title: item.title }]
+      const hit = walkMenu(item.children, path, [...parents, item])
+      if (hit) return hit
+      continue
     }
+    if (item.path === path) {
+      return { item, parents }
+    }
+  }
+  return null
+}
+
+/** 叶子 path 所属一级业务中心；未登记的地址返回 null */
+export function findBusinessCenter(path: string): BusinessCenterId | null {
+  for (const center of businessCenters) {
+    if (walkMenu(menusByCenter[center.id], path, [])) {
+      return center.id
+    }
+  }
+  return null
+}
+
+/** 按当前 path 解析「分组 / 叶子」；未命中返回空 */
+export function findMenuBreadcrumb(path: string): MenuCrumb[] {
+  for (const center of businessCenters) {
+    const hit = walkMenu(menusByCenter[center.id], path, [])
+    if (!hit) continue
+    return [...hit.parents, hit.item].map((item) => ({ title: item.title }))
   }
   return []
 }
 
 /** 当前 path 所属父级 submenu index（name），用于展开侧栏 */
 export function findOpenMenuIndexes(path: string): string[] {
-  for (const item of appMenu) {
-    if (item.children?.some((c) => c.path === path)) {
-      return [item.name]
+  for (const center of businessCenters) {
+    const hit = walkMenu(menusByCenter[center.id], path, [])
+    if (hit) {
+      return hit.parents.map((item) => item.name)
     }
   }
   return []

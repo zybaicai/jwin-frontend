@@ -190,12 +190,6 @@ watch(hasViewPermission, () => {
 
 <template>
   <section class="consumable-category-manage">
-    <header class="page-header">
-      <div>
-        <h1>耗材类别</h1>
-        <p class="subtitle">商品管理员配置；列表按后端默认 sequence 升序，不支持 sortField</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

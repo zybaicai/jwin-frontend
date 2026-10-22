@@ -302,15 +302,6 @@ watch(
 
 <template>
   <section class="card-category-manage">
-    <header class="page-header">
-      <div>
-        <h1>卡类分类</h1>
-        <p class="subtitle">
-          四类卡商品归类展示（平面列表）；可售门店仍由 SaleEntity 配置。分类不作渠道与报价依据。
-          默认按排序值升序、同序按 ID 升序。
-        </p>
-      </div>
-    </header>
 
     <el-tabs v-model="activeKind" class="kind-tabs">
       <el-tab-pane

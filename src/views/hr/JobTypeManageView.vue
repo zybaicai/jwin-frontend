@@ -194,12 +194,6 @@ watch(hasViewPermission, () => void loadList(), { immediate: true })
 
 <template>
   <section class="job-type-manage">
-    <header class="page-header">
-      <div>
-        <h1>职务管理</h1>
-        <p class="subtitle">人事职务档案（TK_JobType）；权限角色绑定亦共用此表</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

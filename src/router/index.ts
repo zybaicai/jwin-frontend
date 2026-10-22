@@ -8,6 +8,8 @@ import HomeView from '@/views/HomeView.vue'
 import LoginView from '@/views/LoginView.vue'
 import CustomerListView from '@/views/customer/CustomerListView.vue'
 import CustomerLevelManageView from '@/views/customer/CustomerLevelManageView.vue'
+import CustomerMembershipEntryView from '@/views/customer/CustomerMembershipEntryView.vue'
+import CustomerProfileSceneView from '@/views/customer/CustomerProfileSceneView.vue'
 import CustomerSourceManageView from '@/views/customer/CustomerSourceManageView.vue'
 import CustomerTagManageView from '@/views/customer/CustomerTagManageView.vue'
 import SalesCashierView from '@/views/sale/SalesCashierView.vue'
@@ -141,7 +143,33 @@ const router = createRouter({
           component: CustomerLevelManageView,
           meta: {
             requiresAuth: true,
-            title: '会员等级',
+            title: '等级设置',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'customers/profile-scenes',
+          name: 'customer-profile-scenes',
+          component: CustomerProfileSceneView,
+          meta: {
+            requiresAuth: true,
+            title: '档案应用场景',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'customers/membership-entry',
+          name: 'customer-membership-entry',
+          component: CustomerMembershipEntryView,
+          meta: {
+            requiresAuth: true,
+            title: '入会门槛',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,

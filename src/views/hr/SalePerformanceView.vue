@@ -145,12 +145,6 @@ watch(
 
 <template>
   <section class="sale-performance">
-    <header class="page-header">
-      <div>
-        <h1>销售业绩</h1>
-        <p class="subtitle">汇总 + 单据明细（含经手占比）；补欠款不计入销售业绩</p>
-      </div>
-    </header>
 
     <el-alert
       type="info"

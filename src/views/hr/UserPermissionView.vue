@@ -384,12 +384,6 @@ watch(
 
 <template>
   <section class="user-permission">
-    <header class="page-header">
-      <div>
-        <h1>用户权限</h1>
-        <p class="subtitle">按员工分配权限角色，以及这些角色可以访问和操作的组织范围</p>
-      </div>
-    </header>
 
     <el-form :inline="true" class="filter-bar" @submit.prevent="handleSearch">
       <el-form-item label="员工信息">

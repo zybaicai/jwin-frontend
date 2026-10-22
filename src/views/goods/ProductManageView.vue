@@ -387,12 +387,6 @@ watch(
 
 <template>
   <section class="product-manage">
-    <header class="page-header">
-      <div>
-        <h1>产品管理</h1>
-        <p class="subtitle">维护产品主数据（TE+TB）；无「允许消耗」字段</p>
-      </div>
-    </header>
 
     <div class="filter-bar">
       <div class="filter-toolbar">

@@ -725,12 +725,6 @@ onUnmounted(() => {
 <template>
   <div class="page">
     <header class="page-header">
-      <div>
-        <h1>预约配置</h1>
-        <p class="desc">
-          维护本店班次、日排班、门店规则与护理师能力；预约类型与提醒由管理员配置。
-        </p>
-      </div>
       <el-button :loading="loading" @click="loadAll">刷新</el-button>
     </header>
 

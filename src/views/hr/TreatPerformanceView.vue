@@ -143,12 +143,6 @@ watch(
 
 <template>
   <section class="treat-performance">
-    <header class="page-header">
-      <div>
-        <h1>划卡业绩</h1>
-        <p class="subtitle">汇总 + 单据明细（含经手占比）；补欠款不计入划卡业绩</p>
-      </div>
-    </header>
 
     <el-alert
       type="info"

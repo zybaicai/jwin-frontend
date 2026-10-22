@@ -7,10 +7,13 @@ import type {
   CreateCustomerLevelBody,
   CustomerCardItem,
   CustomerCardQuery,
+  CustomerCreateFieldSchema,
   CustomerDetail,
   CustomerLevelItem,
+  CustomerProfileField,
   CustomerListItem,
   CustomerListQuery,
+  MembershipEntryRule,
   CustomerPaymentItem,
   CustomerPaymentQuery,
   CustomerTreatItem,
@@ -813,6 +816,45 @@ export async function deleteCustomerLevel(id: number): Promise<void> {
  * PUT /v1/customers/{id}/member-level —— 管理员覆盖等级 / 锁定
  * 权限：customer:level:override
  */
+export async function fetchCustomerProfileSettings(): Promise<CustomerProfileField[]> {
+  const response = await request.get<ApiResponse<CustomerProfileField[]>>(
+    '/v1/customer-profile-settings/create',
+  )
+  return response.data.data ?? []
+}
+
+export async function saveCustomerProfileSettings(
+  fields: Array<{ fieldCode: string; requirement: string }>,
+): Promise<CustomerProfileField[]> {
+  const response = await request.put<ApiResponse<CustomerProfileField[]>>(
+    '/v1/customer-profile-settings/create',
+    { fields },
+  )
+  return response.data.data ?? []
+}
+
+export async function fetchCustomerCreateSchema(): Promise<CustomerCreateFieldSchema[]> {
+  const response = await request.get<ApiResponse<CustomerCreateFieldSchema[]>>(
+    '/v1/customer-form-fields/create-schema',
+  )
+  return response.data.data ?? []
+}
+
+export async function fetchMembershipEntryRule(): Promise<MembershipEntryRule> {
+  const response = await request.get<ApiResponse<MembershipEntryRule>>(
+    '/v1/customer-membership/entry-rule',
+  )
+  return response.data.data
+}
+
+export async function saveMembershipEntryRule(body: MembershipEntryRule): Promise<MembershipEntryRule> {
+  const response = await request.put<ApiResponse<MembershipEntryRule>>(
+    '/v1/customer-membership/entry-rule',
+    body,
+  )
+  return response.data.data
+}
+
 export async function overrideCustomerMemberLevel(
   customerId: number,
   body: OverrideCustomerMemberLevelBody,

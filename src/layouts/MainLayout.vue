@@ -8,10 +8,12 @@ import AppLogo from '@/layouts/components/AppLogo.vue'
 import AppSidebar from '@/layouts/components/AppSidebar.vue'
 import AppTabs from '@/layouts/components/AppTabs.vue'
 import { resolveCachedView, retainCachedViews } from '@/layouts/tab-cache'
+import { useNavigationStore } from '@/stores/navigation'
 import { useTabsStore } from '@/stores/tabs'
 
 const route = useRoute()
 const tabsStore = useTabsStore()
+const navigationStore = useNavigationStore()
 const collapsed = ref(false)
 
 function toggleSidebar() {
@@ -20,8 +22,16 @@ function toggleSidebar() {
 
 watch(
   () => route.fullPath,
-  () => {
+  (_fullPath, previous) => {
     tabsStore.syncFromRoute(route)
+    if (previous == null) {
+      navigationStore.alignInitialRoute(route.path)
+      return
+    }
+    const previousPath = previous.split('?')[0]?.split('#')[0] ?? previous
+    if (previousPath !== route.path) {
+      navigationStore.syncFromPath(route.path)
+    }
   },
   { immediate: true },
 )

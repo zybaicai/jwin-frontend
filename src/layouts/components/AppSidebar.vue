@@ -3,10 +3,12 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 import {
-  appMenu,
+  findBusinessCenter,
   findOpenMenuIndexes,
+  menusByCenter,
   type AppMenuItem,
 } from '@/config/menu'
+import { useNavigationStore } from '@/stores/navigation'
 import { usePermissionStore } from '@/stores/permission'
 
 defineProps<{
@@ -15,7 +17,13 @@ defineProps<{
 
 const route = useRoute()
 const permissionStore = usePermissionStore()
+const navigationStore = useNavigationStore()
 const activePath = computed(() => route.path)
+const currentMenu = computed(() => menusByCenter[navigationStore.activeTopModule])
+/** 当前页不属于正在看的业务中心时，侧栏不高亮任何节点 */
+const highlightPath = computed(() =>
+  findBusinessCenter(activePath.value) === navigationStore.activeTopModule ? activePath.value : '',
+)
 
 function isLeafVisible(item: AppMenuItem): boolean {
   if (item.permission == null) {
@@ -28,6 +36,10 @@ function isLeafVisible(item: AppMenuItem): boolean {
 function filterMenu(items: AppMenuItem[]): AppMenuItem[] {
   const result: AppMenuItem[] = []
   for (const item of items) {
+    if (item.placeholder) {
+      result.push(item)
+      continue
+    }
     if (item.children && item.children.length > 0) {
       const children = filterMenu(item.children)
       if (children.length === 0) {
@@ -43,26 +55,33 @@ function filterMenu(items: AppMenuItem[]): AppMenuItem[] {
   return result
 }
 
-const visibleMenu = computed(() => filterMenu(appMenu))
+const visibleMenu = computed(() => filterMenu(currentMenu.value))
+const centerHasMenu = computed(() => currentMenu.value.length > 0)
 
 const defaultOpeneds = computed(() => {
-  const indexes = findOpenMenuIndexes(activePath.value)
+  if (!highlightPath.value) return []
+  const indexes = findOpenMenuIndexes(highlightPath.value)
   return indexes.length ? [indexes[0]!] : []
 })
 
-/** 路由变化时强制同步展开态（default-openeds 仅首次生效） */
+/** 切换业务中心或路由时重挂菜单，展开态才能跟上 */
 const menuKey = computed(
-  () => `${activePath.value}|${defaultOpeneds.value.join(',')}`,
+  () => `${navigationStore.activeTopModule}|${highlightPath.value}|${defaultOpeneds.value.join(',')}`,
 )
 </script>
 
 <template>
   <div class="sidebar-scroll">
+    <div v-if="visibleMenu.length === 0" class="sidebar-empty">
+      <p v-if="!centerHasMenu">功能建设中</p>
+      <p>暂无可用菜单</p>
+    </div>
     <el-menu
+      v-else
       :key="menuKey"
       class="sidebar-menu"
       :collapse="collapsed"
-      :default-active="activePath"
+      :default-active="highlightPath"
       :default-openeds="defaultOpeneds"
       unique-opened
       router
@@ -71,7 +90,21 @@ const menuKey = computed(
       active-text-color="#f8fafc"
     >
       <template v-for="item in visibleMenu" :key="item.name">
-        <el-sub-menu v-if="item.children && item.children.length > 0" :index="item.name">
+        <el-sub-menu v-if="item.placeholder" :index="item.name">
+          <template #title>
+            <el-icon v-if="item.icon">
+              <component :is="item.icon" />
+            </el-icon>
+            <span class="menu-title" :title="item.title">{{ item.title }}</span>
+          </template>
+          <el-menu-item :index="`${item.name}-empty`" disabled>
+            <span class="menu-title">暂无可配置功能</span>
+          </el-menu-item>
+          <el-menu-item :index="`${item.name}-building`" disabled>
+            <span class="menu-title">功能建设中</span>
+          </el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu v-else-if="item.children && item.children.length > 0" :index="item.name">
           <template #title>
             <el-icon v-if="item.icon">
               <component :is="item.icon" />
@@ -105,6 +138,17 @@ const menuKey = computed(
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.sidebar-empty {
+  padding: 28px 16px;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.sidebar-empty p {
+  margin: 0;
 }
 
 .sidebar-menu {
