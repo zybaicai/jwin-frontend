@@ -753,7 +753,7 @@ onUnmounted(() => {
                   link
                   type="primary"
                   :disabled="!canEdit"
-                  @click="openEditShift(row)"
+                  @click="openEditShift(row as AppointmentScheduleItem)"
                 >
                   编辑
                 </el-button>
@@ -988,12 +988,12 @@ onUnmounted(() => {
             </el-table-column>
             <el-table-column label="操作" width="140" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="openEditType(row)">编辑</el-button>
+                <el-button link type="primary" @click="openEditType(row as AppointmentTypeItem)">编辑</el-button>
                 <el-button
                   v-if="row.active !== false"
                   link
                   type="danger"
-                  @click="removeType(row)"
+                  @click="removeType(row as AppointmentTypeItem)"
                 >
                   停用
                 </el-button>

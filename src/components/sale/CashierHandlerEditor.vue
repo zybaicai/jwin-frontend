@@ -267,7 +267,7 @@ defineExpose({ ratioValid, ratioSum, openPicker, reload: loadCandidates })
       <div v-loading="loading" class="candidate-grid">
         <button
           v-for="emp in candidates"
-          :key="emp.employeeId || emp.name"
+          :key="emp.employeeId || emp.name || ''"
           type="button"
           class="candidate-btn"
           :class="{ active: draft.some((d) => d.employeeId === emp.employeeId) }"

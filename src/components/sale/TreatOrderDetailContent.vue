@@ -146,7 +146,7 @@ function settlementLabel(item: TreatOrderItem): string {
         </el-table-column>
         <el-table-column label="结算方式" min-width="100">
           <template #default="{ row }">
-            {{ settlementLabel(row) }}
+            {{ settlementLabel(row as TreatOrderItem) }}
           </template>
         </el-table-column>
         <el-table-column label="小计" min-width="100" align="right">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import type { ElTable, ElTree } from 'element-plus'
+import type { ElTree, TableInstance } from 'element-plus'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
@@ -41,7 +41,7 @@ const loading = ref(false)
 const listError = ref<string | null>(null)
 const orgTree = ref<OrganizationTreeNode[]>([])
 const jobTypes = ref<JobTypeRecord[]>([])
-const tableRef = ref<InstanceType<typeof ElTable>>()
+const tableRef = ref<TableInstance>()
 
 const entityId = ref<number | null>(null)
 const keywordInput = ref('')

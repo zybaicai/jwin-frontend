@@ -55,7 +55,6 @@ const filteredGoods = computed(() => {
   }
   // 分类过滤：优先用 meta.categoryId，否则用名称弱匹配
   if (selectedL2.value != null || selectedL1.value != null) {
-    const wantId = selectedL2.value ?? selectedL1.value
     const l2Ids = new Set(
       (selectedL1.value != null
         ? (categoryTree.value.find((c) => c.id === selectedL1.value)?.children ?? []).map(

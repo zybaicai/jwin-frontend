@@ -274,14 +274,15 @@ async function onSubmit(): Promise<void> {
       <section v-if="holders.length" class="section">
         <h4>权益持有人</h4>
         <el-radio-group
-          v-model="holderCustomerId"
+          :model-value="holderCustomerId ?? undefined"
           :disabled="loading || submitting"
           class="holder-group"
+          @update:model-value="holderCustomerId = $event as number | null"
         >
           <el-radio
             v-for="h in holders"
-            :key="h.holderCustomerId ?? h.holderCustomerName"
-            :value="h.holderCustomerId"
+            :key="h.holderCustomerId ?? h.holderCustomerName ?? ''"
+            :value="h.holderCustomerId as number"
             :disabled="(h.selectableCount ?? 0) <= 0"
           >
             {{ h.holderCustomerName || h.holderCustomerId }}
@@ -358,9 +359,9 @@ async function onSubmit(): Promise<void> {
           <el-table-column label="选择" width="70" align="center">
             <template #default="{ row }">
               <el-checkbox
-                :model-value="isChecked(row)"
+                :model-value="isChecked(row as RefundPreviewLine)"
                 :disabled="!row.selectable || loading || submitting"
-                @change="(v: boolean | string | number) => onToggleRow(row, Boolean(v))"
+                @change="(v: boolean | string | number) => onToggleRow(row as RefundPreviewLine, Boolean(v))"
               />
             </template>
           </el-table-column>
@@ -390,8 +391,8 @@ async function onSubmit(): Promise<void> {
                 —
               </template>
               <el-input-number
-                v-else-if="row.selectable && isChecked(row)"
-                v-model="selectedQty[lineKey(row)]"
+                v-else-if="row.selectable && isChecked(row as RefundPreviewLine)"
+                v-model="selectedQty[lineKey(row as RefundPreviewLine)]"
                 :min="1"
                 :max="row.maxRefundableQty || 1"
                 :step="1"

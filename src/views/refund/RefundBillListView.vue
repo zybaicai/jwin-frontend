@@ -463,7 +463,7 @@ onMounted(() => {
                       ? 'success'
                       : row.approvalStatus === '9'
                         ? 'info'
-                        : ''
+                        : 'primary'
                 "
               >
                 {{ row.approvalStatusName || statusLabel(row.approvalStatus) }}

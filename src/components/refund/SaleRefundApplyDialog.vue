@@ -396,11 +396,15 @@ function orderLabel(order: SaleOrderDetail): string {
 
           <section v-if="holders.length" class="section">
             <h4>权益持有人</h4>
-            <el-radio-group v-model="holderCustomerId" class="holder-group">
+            <el-radio-group
+              :model-value="holderCustomerId ?? undefined"
+              class="holder-group"
+              @update:model-value="holderCustomerId = $event as number | null"
+            >
               <el-radio
                 v-for="h in holders"
-                :key="h.holderCustomerId ?? h.holderCustomerName"
-                :value="h.holderCustomerId"
+                :key="h.holderCustomerId ?? h.holderCustomerName ?? ''"
+                :value="h.holderCustomerId as number"
                 :disabled="(h.selectableCount ?? 0) <= 0"
               >
                 {{ h.holderCustomerName || h.holderCustomerId }}
@@ -458,9 +462,9 @@ function orderLabel(order: SaleOrderDetail): string {
               <el-table-column label="选择" width="60" align="center">
                 <template #default="{ row }">
                   <el-checkbox
-                    :model-value="isChecked(row)"
+                    :model-value="isChecked(row as RefundPreviewLine)"
                     :disabled="!row.selectable"
-                    @change="(v: boolean | string | number) => onToggleRow(row, Boolean(v))"
+                    @change="(v: boolean | string | number) => onToggleRow(row as RefundPreviewLine, Boolean(v))"
                   />
                 </template>
               </el-table-column>
@@ -480,8 +484,8 @@ function orderLabel(order: SaleOrderDetail): string {
                 <template #default="{ row }">
                   <template v-if="row.accountType === 'SAVING_CARD'">—</template>
                   <el-input-number
-                    v-else-if="row.selectable && isChecked(row)"
-                    v-model="selectedQty[lineKey(row)]"
+                    v-else-if="row.selectable && isChecked(row as RefundPreviewLine)"
+                    v-model="selectedQty[lineKey(row as RefundPreviewLine)]"
                     :min="1"
                     :max="row.maxRefundableQty || 1"
                     size="small"

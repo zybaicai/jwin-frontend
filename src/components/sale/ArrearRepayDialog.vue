@@ -217,9 +217,9 @@ async function onConfirm(): Promise<void> {
       <el-table-column label="选" width="52" align="center">
         <template #default="{ row }">
           <el-checkbox
-            :model-value="selected.has(lineKey(row))"
+            :model-value="selected.has(lineKey(row as ArrearItem))"
             :disabled="!row.repayable"
-            @change="(v: boolean | string | number) => toggleRow(row, !!v)"
+            @change="(v: boolean | string | number) => toggleRow(row as ArrearItem, !!v)"
           />
         </template>
       </el-table-column>
@@ -247,16 +247,16 @@ async function onConfirm(): Promise<void> {
       <el-table-column label="本次补缴" width="120">
         <template #default="{ row }">
           <el-input-number
-            :model-value="payAmountByKey[lineKey(row)] ?? 0"
+            :model-value="payAmountByKey[lineKey(row as ArrearItem)] ?? 0"
             :min="0"
             :max="Number(row.arrearAmount)"
             :precision="2"
             :step="1"
-            :disabled="!row.repayable || !selected.has(lineKey(row))"
+            :disabled="!row.repayable || !selected.has(lineKey(row as ArrearItem))"
             controls-position="right"
             size="small"
             style="width: 100%"
-            @update:model-value="(v: number | undefined) => onAmountChange(row, v)"
+            @update:model-value="(v: number | undefined) => onAmountChange(row as ArrearItem, v)"
           />
         </template>
       </el-table-column>
@@ -266,7 +266,7 @@ async function onConfirm(): Promise<void> {
             formatAmountDisplay(
               Math.max(
                 0,
-                Number(row.arrearAmount) - Number(payAmountByKey[lineKey(row)] ?? 0),
+                Number(row.arrearAmount) - Number(payAmountByKey[lineKey(row as ArrearItem)] ?? 0),
               ),
             )
           }}

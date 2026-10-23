@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import type { ElTree } from 'element-plus'
+import type { CascaderOption, ElTree } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { codeToText, regionData } from 'element-china-area-data'
 
@@ -1129,7 +1129,7 @@ watch(
             <el-form-item label="地址" required>
               <el-cascader
                 v-model="orgForm.region"
-                :options="regionData"
+                :options="regionData as unknown as CascaderOption[]"
                 clearable
                 filterable
                 placeholder="省 / 市 / 区"
