@@ -58,6 +58,12 @@ export interface HandlerCandidateResult {
   storeId: number | null
   handlerRoleId: number | null
   handlerRoleName: string | null
+  /** 店务经手人分类名（如「产品销售经手人」），启用 TB_Handler 规则时有值 */
+  storeHandlerName: string | null
+  /** 店务经手人规则名（如「销售经手人」） */
+  storeHandlerRuleName: string | null
+  /** 命中的 TB_Handler 有效规则数（多条 OR 合并） */
+  storeHandlerRuleCount: number | null
   allowedJobTypeIds: number[] | null
   employees: HandlerCandidateEmployee[]
 }

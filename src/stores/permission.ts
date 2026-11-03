@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import type { CurrentUserVo } from '@/types/auth'
 import type { RoleBrief } from '@/types/user'
+import { DEV_MOCK_AUTH } from '@/mock/dev-auth'
 
 /**
  * 前端权限上下文。只读 Auth Store 里的 /me 结果，不请求接口、不推导角色权限。
@@ -52,6 +53,10 @@ export const usePermissionStore = defineStore('permission', () => {
   }
 
   function hasPermission(permissionCode: string): boolean {
+    // 本地调试旁路：全部放行，便于浏览所有页面。
+    if (DEV_MOCK_AUTH) {
+      return true
+    }
     if (permissionCode === '') {
       return false
     }

@@ -23,7 +23,6 @@ import {
   CARD_SORT_FIELDS,
   CardPermission,
   formatCardValidPeriod,
-  formatSellStatus,
   type CardCategoryItem,
   type CardSortField,
   type PackageCardItem,
@@ -63,7 +62,9 @@ const SORT_WHITELIST = new Set<string>(CARD_SORT_FIELDS)
 
 const loading = ref(false)
 const listError = ref<string | null>(null)
-const onlySellable = ref(false)
+const keyword = ref('')
+/** 'all' | 'sellable' | 'unsellable' */
+const sellableFilter = ref<'all' | 'sellable' | 'unsellable'>('all')
 const categoryFilter = ref<number | null>(null)
 const records = ref<PackageCardItem[]>([])
 const sortField = ref<CardSortField>('id')
@@ -194,17 +195,27 @@ async function loadList(): Promise<void> {
   await runExclusive(loading, async () => {
     listError.value = null
     try {
+      const onlySellable = sellableFilter.value === 'sellable' ? true
+        : sellableFilter.value === 'unsellable' ? false : undefined
       records.value = await fetchPackageCardList({
-        onlySellable: onlySellable.value ? true : undefined,
+        onlySellable,
         categoryId: categoryFilter.value ?? undefined,
         sortField: sortField.value,
         sortOrder: sortOrder.value,
+        keyword: keyword.value.trim() || undefined,
       })
     } catch (error) {
       records.value = []
       listError.value = getUserFriendlyErrorMessage(error)
     }
   })
+}
+
+function resetFilters(): void {
+  keyword.value = ''
+  sellableFilter.value = 'all'
+  categoryFilter.value = null
+  void loadList()
 }
 
 async function handleSortChange(payload: {
@@ -542,16 +553,6 @@ function rowOf(row: unknown): PackageCardItem {
   return row as PackageCardItem
 }
 
-function childCount(row: PackageCardItem): string {
-  const n =
-    (row.projects?.length ?? 0) +
-    (row.products?.length ?? 0) +
-    (row.generalCards?.length ?? 0) +
-    (row.timeCards?.length ?? 0) +
-    (row.savingCards?.length ?? 0)
-  return String(n)
-}
-
 watch(hasViewPermission, () => {
   void loadChildOptions()
   void loadCategoryOptions()
@@ -570,16 +571,21 @@ onActivated(() => {
     <div class="filter-bar">
       <div class="filter-toolbar">
         <el-form :inline="true" class="filter-form" @submit.prevent="loadList">
-        <el-form-item label="可售">
-          <el-checkbox v-model="onlySellable">仅可售</el-checkbox>
+        <el-form-item label="套餐卡名称">
+          <el-input
+            v-model="keyword"
+            placeholder="输入套餐卡名称"
+            clearable
+            style="width: 200px"
+          />
         </el-form-item>
-        <el-form-item label="分类">
+        <el-form-item label="套餐卡分类">
           <el-select
             v-model="categoryFilter"
             clearable
             filterable
-            placeholder="分类筛选"
-            style="width: 180px"
+            placeholder="全部套餐卡分类"
+            style="width: 200px"
           >
             <el-option
               v-for="opt in categoryOptions"
@@ -589,8 +595,19 @@ onActivated(() => {
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="状态">
+          <el-select
+            v-model="sellableFilter"
+            style="width: 140px"
+          >
+            <el-option label="全部" value="all" />
+            <el-option label="可售" value="sellable" />
+            <el-option label="停售" value="unsellable" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
         </el-form>
         <el-button
@@ -618,34 +635,44 @@ onActivated(() => {
         >
           <el-table-column
             prop="name"
-            label="套餐名称"
-            min-width="140"
+            label="套餐卡名称"
+            min-width="160"
             sortable="custom"
             show-overflow-tooltip
           >
-            <template #default="{ row }">{{ rowOf(row).name || '—' }}</template>
+            <template #default="{ row }">
+              <span class="pkg-name">{{ rowOf(row).name || '—' }}</span>
+            </template>
           </el-table-column>
-          <el-table-column label="分类" min-width="120" show-overflow-tooltip>
+          <el-table-column
+            prop="alias"
+            label="套餐卡编号"
+            min-width="140"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{ rowOf(row).alias || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="套餐卡分类" min-width="130" show-overflow-tooltip>
             <template #default="{ row }">
               {{ rowOf(row).categoryName || (rowOf(row).categoryId != null ? `#${rowOf(row).categoryId}` : '—') }}
             </template>
           </el-table-column>
-          <el-table-column prop="price" label="售价" min-width="100" align="right" sortable="custom">
+          <el-table-column prop="price" label="销售价格" min-width="100" align="right" sortable="custom">
             <template #default="{ row }">{{ formatAmountDisplay(rowOf(row).price) }}</template>
           </el-table-column>
-          <el-table-column label="有效期" min-width="120">
+          <el-table-column label="卡期限" min-width="110">
             <template #default="{ row }">
               {{ formatCardValidPeriod(rowOf(row).validType, rowOf(row).validDay) }}
             </template>
           </el-table-column>
-          <el-table-column label="子项数" width="80" align="right">
-            <template #default="{ row }">{{ childCount(rowOf(row)) }}</template>
-          </el-table-column>
-          <el-table-column prop="allowSell" label="状态" width="90" sortable="custom">
+          <el-table-column label="是否可赠送" width="100" align="center">
             <template #default="{ row }">
-              <el-tag :type="rowOf(row).allowSell === false ? 'info' : 'success'" size="small">
-                {{ formatSellStatus(rowOf(row).allowSell) }}
-              </el-tag>
+              {{ rowOf(row).allowLargess ? '是' : '否' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="上架状态" width="100" sortable="custom" align="center">
+            <template #default="{ row }">
+              {{ rowOf(row).allowSell === false ? '否' : '是' }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="160" fixed="right">
@@ -665,7 +692,7 @@ onActivated(() => {
                 :disabled="deactivatingIds.has(rowOf(row).id)"
                 @click="handleDeactivate(rowOf(row))"
               >
-                停售
+                停用
               </el-button>
             </template>
           </el-table-column>

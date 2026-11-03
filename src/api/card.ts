@@ -183,6 +183,7 @@ export async function fetchPackageCardList(
       categoryId: q.categoryId,
       sortField: q.sortField,
       sortOrder: q.sortOrder,
+      keyword: q.keyword,
     }),
   })
   return response.data.data ?? []

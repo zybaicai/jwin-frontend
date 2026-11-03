@@ -24,6 +24,10 @@ export interface ProjectItem {
   allowLargess: boolean | null
   brandId: number | null
   remark: string | null
+  /** 上线时间（null=永久），ISO 日期字符串 YYYY-MM-DD */
+  saleStartDate: string | null
+  /** 下线时间（null=永久），ISO 日期字符串 YYYY-MM-DD */
+  saleEndingDate: string | null
 }
 
 /** 对齐 CreateProjectCommand */
@@ -38,6 +42,8 @@ export interface CreateProjectBody {
   allowLargess?: boolean | null
   brandId?: number | null
   remark?: string | null
+  saleStartDate?: string | null
+  saleEndingDate?: string | null
 }
 
 /** 对齐 UpdateProjectCommand */
@@ -52,6 +58,8 @@ export interface UpdateProjectBody {
   allowLargess: boolean
   brandId?: number | null
   remark?: string | null
+  saleStartDate?: string | null
+  saleEndingDate?: string | null
 }
 
 /** 对齐 ProjectPageQuery；sortField 白名单 id|name|price */

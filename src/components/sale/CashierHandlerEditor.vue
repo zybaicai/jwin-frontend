@@ -27,6 +27,13 @@ const model = defineModel<HandlerDraftRow[]>({ default: () => [] })
 const dialogVisible = ref(false)
 const loading = ref(false)
 const candidates = ref<HandlerCandidateEmployee[]>([])
+/** 后端完整返回，用于展示店务经手人分类名 */
+const candidateMeta = ref<{
+  storeHandlerName: string | null
+  storeHandlerRuleName: string | null
+  ruleCount: number
+  fallback: boolean
+}>({ storeHandlerName: null, storeHandlerRuleName: null, ruleCount: 0, fallback: true })
 const keyword = ref('')
 const draft = ref<HandlerDraftRow[]>([])
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
@@ -83,6 +90,11 @@ function equalRatios(count: number): number[] {
   return ratios
 }
 
+const dialogTitle = computed(() => {
+  const name = candidateMeta.value.storeHandlerName
+  return name ? `选择${name}` : '选择经手人'
+})
+
 function applyEqualRatios(rows: HandlerDraftRow[]): HandlerDraftRow[] {
   const ratios = equalRatios(rows.length)
   return rows.map((row, i) => ({ ...row, ratio: ratios[i] ?? null }))
@@ -101,6 +113,12 @@ async function loadCandidates(): Promise<void> {
         keyword: keyword.value.trim() || undefined,
       })
       candidates.value = data.employees ?? []
+      candidateMeta.value = {
+        storeHandlerName: data.storeHandlerName ?? null,
+        storeHandlerRuleName: data.storeHandlerRuleName ?? null,
+        ruleCount: data.storeHandlerRuleCount ?? 0,
+        fallback: data.storeHandlerName == null,
+      }
     } catch (error) {
       candidates.value = []
       uiMessage.error(getUserFriendlyErrorMessage(error))
@@ -246,12 +264,23 @@ defineExpose({ ratioValid, ratioSum, openPicker, reload: loadCandidates })
 
     <el-dialog
       v-model="dialogVisible"
-      title="选择经手人"
+      :title="dialogTitle"
       width="520px"
       append-to-body
       destroy-on-close
       :close-on-click-modal="false"
     >
+      <div v-if="candidateMeta.storeHandlerName" class="handler-rule-badge">
+        <el-tag type="warning" effect="plain" size="small">
+          {{ candidateMeta.storeHandlerName }}
+          <template v-if="candidateMeta.ruleCount">
+            · {{ candidateMeta.ruleCount }} 条规则
+          </template>
+        </el-tag>
+        <span v-if="candidateMeta.storeHandlerRuleName" class="rule-rule-name">
+          默认「{{ candidateMeta.storeHandlerRuleName }}」
+        </span>
+      </div>
       <div class="picker-toolbar">
         <el-input
           v-model="keyword"
@@ -414,5 +443,19 @@ defineExpose({ ratioValid, ratioSum, openPicker, reload: loadCandidates })
 .empty-hint {
   color: #909399;
   font-size: 12px;
+}
+.handler-rule-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #fdf6ec;
+  border: 1px solid #faecd8;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.rule-rule-name {
+  color: #606266;
 }
 </style>

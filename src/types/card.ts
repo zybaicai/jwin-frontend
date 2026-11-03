@@ -15,6 +15,7 @@ export interface CardListQuery {
   categoryId?: number | null
   sortField?: CardSortField
   sortOrder?: 'asc' | 'desc'
+  keyword?: string
 }
 
 /** 四类卡分类路径段 */
@@ -211,6 +212,8 @@ export interface PackageCardItemLine {
 export interface PackageCardItem {
   id: number
   name: string | null
+  /** 套餐卡编号（Alias） */
+  alias?: string | null
   categoryId: number | null
   categoryName?: string | null
   price: string | number | null

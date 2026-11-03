@@ -1,12 +1,21 @@
 <!doctype html>
-<html lang="zh-CN">
+<html class="w-full h-full" lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>预道养发 ERP</title>
+    <title>预道养发 · 门店运营管理系统</title>
+    <script>
+      // 关闭 Tailwind preflight，避免影响 Element Plus 全局样式
+      window.tailwind = window.tailwind || {}
+      window.tailwind.config = {
+        corePlugins: { preflight: false },
+      }
+    </script>
+    <script src="/vendor/tailwindcss.js"></script>
+    <script src="/vendor/iconify-icon.min.js"></script>
   </head>
-  <body>
+  <body class="w-full h-full m-0">
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -11,6 +11,7 @@ import CustomerLevelManageView from '@/views/customer/CustomerLevelManageView.vu
 import CustomerMembershipEntryView from '@/views/customer/CustomerMembershipEntryView.vue'
 import CustomerProfileSceneView from '@/views/customer/CustomerProfileSceneView.vue'
 import CustomerSourceManageView from '@/views/customer/CustomerSourceManageView.vue'
+import StoreHandlerManageView from '@/views/store/StoreHandlerManageView.vue'
 import CustomerTagManageView from '@/views/customer/CustomerTagManageView.vue'
 import SalesCashierView from '@/views/sale/SalesCashierView.vue'
 import SaleOrderListView from '@/views/sale/SaleOrderListView.vue'
@@ -46,6 +47,9 @@ import SaleHandlerConfigView from '@/views/hr/SaleHandlerConfigView.vue'
 import TreatHandlerConfigView from '@/views/hr/TreatHandlerConfigView.vue'
 import SalePerformanceView from '@/views/hr/SalePerformanceView.vue'
 import TreatPerformanceView from '@/views/hr/TreatPerformanceView.vue'
+import PayMethodSettingView from '@/views/settings/PayMethodSettingView.vue'
+import ProductCategorySettingView from '@/views/settings/ProductCategorySettingView.vue'
+import ProjectBrandSettingView from '@/views/settings/ProjectBrandSettingView.vue'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -105,6 +109,19 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             title: '客户列表',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'handlers',
+          name: 'store-handlers',
+          component: StoreHandlerManageView,
+          meta: {
+            requiresAuth: true,
+            title: '经手人',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,
@@ -517,6 +534,48 @@ const router = createRouter({
           meta: {
             requiresAuth: true,
             title: '耗材模板',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'settings/pay-methods',
+          name: 'settings-pay-methods',
+          component: PayMethodSettingView,
+          meta: {
+            requiresAuth: true,
+            title: '付款方式',
+            permission: 'system:setting:view',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'settings/product-categories',
+          name: 'settings-product-categories',
+          component: ProductCategorySettingView,
+          meta: {
+            requiresAuth: true,
+            title: '商品分类',
+            permission: 'system:setting:view',
+            keepAlive: true,
+            breadcrumb: true,
+            tabClosable: true,
+            workspaceTab: true,
+          },
+        },
+        {
+          path: 'settings/project-brands',
+          name: 'settings-project-brands',
+          component: ProjectBrandSettingView,
+          meta: {
+            requiresAuth: true,
+            title: '项目品牌',
+            permission: 'system:setting:view',
             keepAlive: true,
             breadcrumb: true,
             tabClosable: true,

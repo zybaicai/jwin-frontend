@@ -19,6 +19,8 @@ export interface OrganizationTreeNode {
   sequence: number | null
   remark?: string | null
   priceAreaId?: number | null
+  /** 该节点及其下级组织的在职员工数 */
+  employeeCount?: number | null
   children: OrganizationTreeNode[]
 }
 

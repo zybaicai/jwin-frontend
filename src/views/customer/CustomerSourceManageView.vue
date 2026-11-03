@@ -1,25 +1,26 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { ArrowDown, ArrowUp, Bottom, Top } from '@element-plus/icons-vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
 import {
   createCustomerSource,
-  deleteCustomerSource,
   fetchCustomerSourceDetail,
   fetchCustomerSourcePage,
+  moveCustomerSource,
   updateCustomerSource,
 } from '@/api/customer'
 import {
   CustomerPermission,
   type CustomerSource,
+  type CustomerSourceMoveDirection,
 } from '@/types/customer'
 import { usePermissionStore } from '@/stores/permission'
 import {
   getUserFriendlyErrorMessage,
   notifyError,
   runExclusive,
-  uiConfirm,
   uiMessage,
 } from '@/utils/ui'
 
@@ -38,15 +39,9 @@ const loading = ref(false)
 const listError = ref<string | null>(null)
 const keywordInput = ref('')
 const keyword = ref('')
-/** '' = 全部, 'true' / 'false' */
+/** '' = 全部, 'true' = 有效, 'false' = 无效 */
 const activeFilter = ref<'' | 'true' | 'false'>('')
-const page = ref(1)
-const size = ref(20)
-const total = ref(0)
 const records = ref<CustomerSource[]>([])
-
-/** 父级名称解析（当前页 + 候选缓存） */
-const parentNameCache = ref<Map<number, string>>(new Map())
 
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
@@ -55,7 +50,6 @@ const formSaving = ref(false)
 const formError = ref<string | null>(null)
 const editingId = ref<number | null>(null)
 const parentCandidates = ref<CustomerSource[]>([])
-const togglingIds = ref<Set<number>>(new Set())
 
 const form = reactive({
   name: '',
@@ -69,35 +63,49 @@ const parentSelectOptions = computed(() => {
   return parentCandidates.value.filter((item) => item.id !== excludeId)
 })
 
-function resolveParentName(parentId: number | null | undefined): string {
-  if (parentId == null || parentId === 0) {
-    return '—'
+/** 按 ParentID 分组并按 Sequence 排序，用于移动按钮的边界判断 */
+const siblingGroups = computed(() => {
+  const groups = new Map<number, CustomerSource[]>()
+  for (const item of records.value) {
+    const key = item.parentId ?? 0
+    const list = groups.get(key) ?? []
+    list.push(item)
+    groups.set(key, list)
   }
-  return parentNameCache.value.get(parentId) || `来源#${parentId}`
+  for (const list of groups.values()) {
+    list.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.id - b.id)
+  }
+  return groups
+})
+
+/** 展示顺序：按 (ParentID, Sequence, ID) 排序的平铺列表 */
+const sortedRecords = computed(() => {
+  return [...records.value].sort(
+    (a, b) =>
+      (a.parentId ?? 0) - (b.parentId ?? 0) ||
+      (a.sequence ?? 0) - (b.sequence ?? 0) ||
+      a.id - b.id,
+  )
+})
+
+function siblingPosition(row: CustomerSource): { index: number; length: number } {
+  const list = siblingGroups.value.get(row.parentId ?? 0) ?? [row]
+  const index = list.findIndex((item) => item.id === row.id)
+  return { index: index < 0 ? 0 : index, length: list.length }
 }
 
-function mergeParentCache(list: CustomerSource[]): void {
-  const next = new Map(parentNameCache.value)
-  for (const item of list) {
-    next.set(item.id, item.name)
-  }
-  parentNameCache.value = next
+function canMoveUp(row: CustomerSource): boolean {
+  return siblingPosition(row).index > 0
 }
 
-async function loadParentCandidates(): Promise<void> {
-  try {
-    const data = await fetchCustomerSourcePage({ page: 1, size: 100 })
-    parentCandidates.value = data.records ?? []
-    mergeParentCache(parentCandidates.value)
-  } catch {
-    parentCandidates.value = []
-  }
+function canMoveDown(row: CustomerSource): boolean {
+  const { index, length } = siblingPosition(row)
+  return index < length - 1
 }
 
 async function loadList(): Promise<void> {
   if (!hasViewPermission.value) {
     records.value = []
-    total.value = 0
     listError.value = '暂无权限查看来源（customer:source:view）'
     return
   }
@@ -112,29 +120,28 @@ async function loadList(): Promise<void> {
             : activeFilter.value === 'false'
               ? false
               : undefined,
-        page: page.value,
-        size: size.value,
+        page: 1,
+        size: 500,
       })
       records.value = data.records ?? []
-      total.value = data.total ?? 0
-      page.value = data.page || page.value
-      size.value = data.size || size.value
-      mergeParentCache(records.value)
-      if (total.value > 0 && records.value.length === 0 && page.value > 1) {
-        page.value -= 1
-        await loadList()
-      }
     } catch (error) {
       records.value = []
-      total.value = 0
       listError.value = getUserFriendlyErrorMessage(error)
     }
   })
 }
 
+async function loadParentCandidates(): Promise<void> {
+  try {
+    const data = await fetchCustomerSourcePage({ page: 1, size: 500 })
+    parentCandidates.value = data.records ?? []
+  } catch {
+    parentCandidates.value = []
+  }
+}
+
 function handleSearch(): void {
   keyword.value = keywordInput.value.trim()
-  page.value = 1
   void loadList()
 }
 
@@ -142,22 +149,10 @@ function handleReset(): void {
   keywordInput.value = ''
   keyword.value = ''
   activeFilter.value = ''
-  page.value = 1
   void loadList()
 }
 
-function handlePageChange(next: number): void {
-  page.value = next
-  void loadList()
-}
-
-function handleSizeChange(next: number): void {
-  size.value = next
-  page.value = 1
-  void loadList()
-}
-
-async function openCreate(): Promise<void> {
+function openCreate(): void {
   formMode.value = 'create'
   editingId.value = null
   form.name = ''
@@ -166,12 +161,20 @@ async function openCreate(): Promise<void> {
   form.active = true
   formError.value = null
   formVisible.value = true
-  formLoading.value = true
-  try {
-    await loadParentCandidates()
-  } finally {
-    formLoading.value = false
-  }
+  void loadParentCandidates()
+}
+
+/** 添加子来源：父级默认当前行 */
+function openCreateChild(row: CustomerSource): void {
+  formMode.value = 'create'
+  editingId.value = null
+  form.name = ''
+  form.parentId = row.id
+  form.sequence = 0
+  form.active = true
+  formError.value = null
+  formVisible.value = true
+  void loadParentCandidates()
 }
 
 async function openEdit(row: CustomerSource): Promise<void> {
@@ -208,10 +211,6 @@ async function handleSubmit(): Promise<void> {
     uiMessage.warning('来源名称最多 50 个字符')
     return
   }
-  if (!Number.isFinite(form.sequence)) {
-    uiMessage.warning('排序必须为数字')
-    return
-  }
   await runExclusive(formSaving, async () => {
     formError.value = null
     try {
@@ -242,52 +241,13 @@ async function handleSubmit(): Promise<void> {
   })
 }
 
-async function handleToggleActive(row: CustomerSource, nextActive: boolean): Promise<void> {
+async function handleMove(row: CustomerSource, direction: CustomerSourceMoveDirection): Promise<void> {
   if (!hasEditPermission.value) {
     return
   }
-  const id = row.id
-  if (togglingIds.value.has(id)) {
-    return
-  }
-  togglingIds.value = new Set(togglingIds.value).add(id)
   try {
-    await updateCustomerSource(id, {
-      name: row.name,
-      parentId: row.parentId ?? 0,
-      sequence: row.sequence ?? 0,
-      active: nextActive,
-    })
-    uiMessage.success(nextActive ? '已启用' : '已停用')
+    await moveCustomerSource(row.id, direction)
     await loadList()
-  } catch (error) {
-    notifyError(error)
-    await loadList()
-  } finally {
-    const next = new Set(togglingIds.value)
-    next.delete(id)
-    togglingIds.value = next
-  }
-}
-
-function onActiveSwitchChange(row: CustomerSource, val: string | number | boolean): void {
-  void handleToggleActive(row, Boolean(val))
-}
-
-async function handleDelete(row: CustomerSource): Promise<void> {
-  const ok = await uiConfirm({
-    title: '删除来源',
-    message: `确认删除来源「${row.name || row.id}」？若仍有子级或顾客引用，后端将拒绝删除。`,
-    confirmText: '删除',
-  })
-  if (!ok) {
-    return
-  }
-  try {
-    await deleteCustomerSource(row.id)
-    uiMessage.success('来源已删除')
-    await loadList()
-    void loadParentCandidates()
   } catch (error) {
     notifyError(error)
   }
@@ -301,7 +261,6 @@ watch(
   hasViewPermission,
   () => {
     void loadList()
-    void loadParentCandidates()
   },
   { immediate: true },
 )
@@ -309,39 +268,38 @@ watch(
 
 <template>
   <section class="source-manage">
-
     <div class="filter-bar">
       <div class="filter-toolbar">
         <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
-        <el-form-item label="名称">
-          <el-input
-            v-model="keywordInput"
-            clearable
-            placeholder="来源名称"
-            style="max-width: 220px"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select
-            v-model="activeFilter"
-            clearable
-            placeholder="状态"
-            style="width: 140px"
-          >
-            <el-option label="全部" value="" />
-            <el-option label="启用" value="true" />
-            <el-option label="停用" value="false" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
-          <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
-        </el-form-item>
+          <el-form-item label="名称">
+            <el-input
+              v-model="keywordInput"
+              clearable
+              placeholder="来源名称"
+              style="max-width: 220px"
+            />
+          </el-form-item>
+          <el-form-item label="有效性">
+            <el-select
+              v-model="activeFilter"
+              clearable
+              placeholder="有效性"
+              style="width: 140px"
+            >
+              <el-option label="全部" value="" />
+              <el-option label="有效" value="true" />
+              <el-option label="无效" value="false" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
+            <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
+          </el-form-item>
         </el-form>
         <el-button
           v-permission="CustomerPermission.SOURCE_EDIT"
           class="create-btn"
-          type="primary"
+          color="#ff7a00"
           @click="openCreate"
         >
           新增来源
@@ -356,55 +314,82 @@ watch(
         @retry="loadList"
       />
       <template v-else>
-        <el-table :data="records" border stripe size="small" empty-text=" ">
-          <el-table-column prop="name" label="来源名称" min-width="180" show-overflow-tooltip>
+        <el-table :data="sortedRecords" border stripe size="small" empty-text=" ">
+          <el-table-column prop="name" label="来源名称" min-width="260" show-overflow-tooltip>
             <template #default="{ row }">
               {{ rowOf(row).name || '—' }}
             </template>
           </el-table-column>
-          <el-table-column label="父级来源" min-width="140" show-overflow-tooltip>
+          <el-table-column label="排序" width="230" align="center">
             <template #default="{ row }">
-              {{ resolveParentName(rowOf(row).parentId) }}
+              <div class="move-btns">
+                <el-button
+                  v-permission="CustomerPermission.SOURCE_EDIT"
+                  class="move-btn"
+                  color="#ff7a00"
+                  circle
+                  :icon="Top"
+                  :disabled="!canMoveUp(rowOf(row))"
+                  @click="handleMove(rowOf(row), 'TOP')"
+                />
+                <el-button
+                  v-permission="CustomerPermission.SOURCE_EDIT"
+                  class="move-btn"
+                  color="#ff7a00"
+                  circle
+                  :icon="ArrowUp"
+                  :disabled="!canMoveUp(rowOf(row))"
+                  @click="handleMove(rowOf(row), 'UP')"
+                />
+                <el-button
+                  v-permission="CustomerPermission.SOURCE_EDIT"
+                  class="move-btn"
+                  color="#ff7a00"
+                  circle
+                  :icon="ArrowDown"
+                  :disabled="!canMoveDown(rowOf(row))"
+                  @click="handleMove(rowOf(row), 'DOWN')"
+                />
+                <el-button
+                  v-permission="CustomerPermission.SOURCE_EDIT"
+                  class="move-btn"
+                  color="#ff7a00"
+                  circle
+                  :icon="Bottom"
+                  :disabled="!canMoveDown(rowOf(row))"
+                  @click="handleMove(rowOf(row), 'BOTTOM')"
+                />
+              </div>
             </template>
           </el-table-column>
-          <el-table-column label="排序" width="90" align="right">
+          <el-table-column label="有效性" width="100" align="center">
             <template #default="{ row }">
-              {{ rowOf(row).sequence ?? 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="{ row }">
-              <el-switch
-                v-if="hasEditPermission"
-                :model-value="rowOf(row).active !== false"
-                :disabled="togglingIds.has(rowOf(row).id)"
-                inline-prompt
-                active-text="启"
-                inactive-text="停"
-                @change="(val) => onActiveSwitchChange(rowOf(row), val)"
-              />
-              <el-tag v-else :type="rowOf(row).active !== false ? 'success' : 'info'" size="small">
-                {{ rowOf(row).active !== false ? '启用' : '停用' }}
+              <el-tag
+                :type="rowOf(row).active !== false ? 'success' : 'info'"
+                effect="plain"
+                size="small"
+              >
+                {{ rowOf(row).active !== false ? '有效' : '无效' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <el-button
                 v-permission="CustomerPermission.SOURCE_EDIT"
-                link
-                type="primary"
+                size="small"
+                color="#ff7a00"
                 @click="openEdit(rowOf(row))"
               >
                 编辑
               </el-button>
               <el-button
                 v-permission="CustomerPermission.SOURCE_EDIT"
-                link
-                type="danger"
-                @click="handleDelete(rowOf(row))"
+                size="small"
+                color="#ff7a00"
+                @click="openCreateChild(rowOf(row))"
               >
-                删除
+                添加子来源
               </el-button>
             </template>
           </el-table-column>
@@ -415,19 +400,6 @@ watch(
           title="暂无来源"
           description="可点击「新增来源」创建信息来源"
         />
-
-        <div v-if="total > 0" class="pager">
-          <el-pagination
-            background
-            layout="total, sizes, prev, pager, next"
-            :total="total"
-            :current-page="page"
-            :page-size="size"
-            :page-sizes="[10, 20, 50, 100]"
-            @current-change="handlePageChange"
-            @size-change="handleSizeChange"
-          />
-        </div>
       </template>
     </div>
 
@@ -463,15 +435,15 @@ watch(
           <el-form-item label="排序">
             <el-input-number v-model="form.sequence" :step="1" controls-position="right" />
           </el-form-item>
-          <el-form-item label="状态">
-            <el-switch v-model="form.active" active-text="启用" inactive-text="停用" />
+          <el-form-item label="有效性">
+            <el-switch v-model="form.active" active-text="有效" inactive-text="无效" />
           </el-form-item>
         </el-form>
       </div>
       <template #footer>
         <el-button :disabled="formSaving" @click="formVisible = false">取消</el-button>
         <el-button
-          type="primary"
+          color="#ff7a00"
           :loading="formSaving"
           :disabled="!hasEditPermission || formLoading"
           @click="handleSubmit"
@@ -490,27 +462,6 @@ watch(
   gap: 16px;
   min-height: 100%;
   padding: 20px 24px 24px;
-}
-
-.page-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.page-header h1 {
-  margin: 0 0 4px;
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: #909399;
 }
 
 .filter-bar {
@@ -546,9 +497,13 @@ watch(
   background: #fff;
 }
 
-.pager {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+.move-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.move-btn + .move-btn {
+  margin-left: 0;
 }
 </style>

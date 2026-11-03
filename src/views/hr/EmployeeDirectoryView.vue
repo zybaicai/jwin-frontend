@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import type { CascaderOption, ElTree } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { codeToText, regionData } from 'element-china-area-data'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
@@ -67,8 +67,10 @@ const treeRef = ref<InstanceType<typeof ElTree>>()
 const treeKeyword = ref('')
 
 const entityId = ref<number | null>(null)
-const keywordInput = ref('')
-const keyword = ref('')
+const nameInput = ref('')
+const mobileInput = ref('')
+const nameKeyword = ref('')
+const mobileKeyword = ref('')
 const jobId = ref<number | null>(null)
 const stateFilter = ref<'' | 'true' | 'false'>('true')
 const page = ref(1)
@@ -82,7 +84,6 @@ const formLoading = ref(false)
 const formSaving = ref(false)
 const formError = ref<string | null>(null)
 const editingId = ref<string | null>(null)
-const phoneRevealed = ref(false)
 const formEntities = ref<EntityTag[]>([])
 
 const form = reactive({
@@ -318,7 +319,8 @@ async function loadList(): Promise<void> {
     try {
       const data = await fetchEmployeePage({
         entityId: entityId.value!,
-        keyword: keyword.value.trim() || undefined,
+        name: nameKeyword.value.trim() || undefined,
+        mobile: mobileKeyword.value.trim() || undefined,
         jobId: jobId.value ?? undefined,
         state:
           stateFilter.value === 'true'
@@ -349,15 +351,69 @@ function handleNodeClick(data: OrganizationTreeNode): void {
   entityId.value = data.id
 }
 
+function handleOrgCommand(command: string): void {
+  if (command === 'child') openCreateOrg(false)
+  else if (command === 'edit') openEditOrg()
+}
+
+function allowDropOrg(
+  draggingNode: { data: unknown },
+  dropNode: { data: unknown },
+  type: 'inner' | 'prev' | 'next',
+): boolean {
+  if (!hasOrgEditPermission.value) return false
+  if (type !== 'inner') return false
+  const dragging = draggingNode.data as OrganizationTreeNode
+  const target = dropNode.data as OrganizationTreeNode
+  if (target.id === dragging.id) return false
+  if (target.store === true) return false
+  const subtree = findNode(orgTree.value, dragging.id)
+  return subtree == null || findNode(subtree.children ?? [], target.id) == null
+}
+
+async function handleOrgNodeDrop(
+  draggingNode: { data: unknown },
+  dropNode: { data: unknown },
+  dropType: string,
+): Promise<void> {
+  if (dropType !== 'inner' || !hasOrgEditPermission.value) return
+  const node = draggingNode.data as OrganizationTreeNode
+  const target = dropNode.data as OrganizationTreeNode
+  try {
+    await updateOrganization(node.id, {
+      parentId: target.id,
+      name: nodeLabel(node),
+      store: node.store === true,
+      warehouse: node.warehouse === true,
+      active: node.active !== false,
+      provinceCode: node.provinceCode ?? null,
+      cityCode: node.cityCode ?? null,
+      areaCode: node.areaCode ?? null,
+      addressDetail: node.addressDetail ?? null,
+      longitude: node.longitude ?? null,
+      latitude: node.latitude ?? null,
+      remark: node.remark ?? null,
+      priceAreaId: node.priceAreaId ?? null,
+    })
+    uiMessage.success(`已将「${nodeLabel(node)}」移动到「${nodeLabel(target)}」下`)
+  } catch (error) {
+    notifyError(error)
+  }
+  await loadOrgTree()
+}
+
 function handleSearch(): void {
-  keyword.value = keywordInput.value.trim()
+  nameKeyword.value = nameInput.value.trim()
+  mobileKeyword.value = mobileInput.value.trim()
   page.value = 1
   void loadList()
 }
 
 function handleReset(): void {
-  keywordInput.value = ''
-  keyword.value = ''
+  nameInput.value = ''
+  mobileInput.value = ''
+  nameKeyword.value = ''
+  mobileKeyword.value = ''
   jobId.value = null
   stateFilter.value = 'true'
   page.value = 1
@@ -392,7 +448,6 @@ function resetForm(): void {
   form.socialSecurityPaymentDate = ''
   form.remark = ''
   form.state = true
-  phoneRevealed.value = false
   formEntities.value = []
 }
 
@@ -418,7 +473,7 @@ function openCreate(): void {
   formVisible.value = true
 }
 
-async function openEdit(row: EmployeeRecord): Promise<void> {
+async function openDetail(row: EmployeeRecord): Promise<void> {
   formMode.value = 'edit'
   editingId.value = row.id
   formError.value = null
@@ -431,7 +486,13 @@ async function openEdit(row: EmployeeRecord): Promise<void> {
     form.name = detail.name ?? ''
     form.alias = detail.alias ?? ''
     form.phoneNumber = detail.maskedMobile || detail.phoneNumber || ''
-    phoneRevealed.value = false
+    if (hasMobilePermission.value) {
+      try {
+        form.phoneNumber = await fetchEmployeeFullMobile(row.id)
+      } catch {
+        // 无完整号码权限时保留脱敏号
+      }
+    }
     form.gender = genderCode(detail.gender)
     form.jobId = detail.jobId
     form.idNumber = detail.idNumber ?? ''
@@ -460,16 +521,6 @@ async function openEdit(row: EmployeeRecord): Promise<void> {
     formVisible.value = false
   } finally {
     formLoading.value = false
-  }
-}
-
-async function revealEditMobile(): Promise<void> {
-  if (!editingId.value || !hasMobilePermission.value) return
-  try {
-    form.phoneNumber = await fetchEmployeeFullMobile(editingId.value)
-    phoneRevealed.value = true
-  } catch (error) {
-    notifyError(error)
   }
 }
 
@@ -514,10 +565,6 @@ function confirmOrgPick(): void {
 
 async function handleSubmit(): Promise<void> {
   if (!hasEditPermission.value) return
-  if (formMode.value === 'create' && !form.id.trim()) {
-    uiMessage.warning('请填写员工编号')
-    return
-  }
   if (!form.name.trim()) {
     uiMessage.warning('请填写员工姓名')
     return
@@ -528,6 +575,10 @@ async function handleSubmit(): Promise<void> {
   }
   if (form.jobId == null) {
     uiMessage.warning('请选择职务')
+    return
+  }
+  if (!form.entryDate) {
+    uiMessage.warning('请选择入职日期')
     return
   }
   const primary = formEntities.value.find((item) => item.primary) ?? formEntities.value[0]
@@ -559,14 +610,15 @@ async function handleSubmit(): Promise<void> {
     }
     try {
       if (formMode.value === 'create') {
-        await createEmployee({ id: form.id.trim(), ...shared })
-        uiMessage.success('员工已创建')
+        const created = await createEmployee(shared)
+        uiMessage.success(`员工已创建，编号 ${created.id}`)
+        syncCurrentAccount(created.id, shared.name, shared.jobId)
       } else if (editingId.value) {
         await updateEmployee(editingId.value, shared)
         uiMessage.success('员工已更新')
+        syncCurrentAccount(editingId.value, shared.name, shared.jobId)
       }
       formVisible.value = false
-      syncCurrentAccount(formMode.value === 'edit' ? editingId.value : form.id.trim(), shared.name, shared.jobId)
       await loadList()
     } catch (error) {
       formError.value = getUserFriendlyErrorMessage(error)
@@ -766,14 +818,20 @@ watch(
           node-key="id"
           highlight-current
           default-expand-all
+          :draggable="hasOrgEditPermission"
+          :allow-drop="allowDropOrg"
           :expand-on-click-node="false"
           :filter-node-method="filterOrgNode"
           :props="{ label: 'entityName', children: 'children' }"
           @node-click="handleNodeClick"
+          @node-drop="handleOrgNodeDrop"
         >
           <template #default="{ data }">
             <span class="tree-node">
               <span class="tree-label">{{ nodeLabel(data) }}</span>
+              <span v-if="data.employeeCount > 0" class="tree-count">
+                （{{ data.employeeCount }}人）
+              </span>
               <el-tag v-if="data.store === true" size="small" type="success" effect="plain">门店</el-tag>
               <el-tag v-if="data.active === false" size="small" type="info" effect="plain">停用</el-tag>
             </span>
@@ -785,10 +843,27 @@ watch(
 
     <div class="list-pane">
       <div class="list-head">
-        <h1>
-          {{ selectedName }}
-          <span v-if="entityId != null" class="head-count">（{{ total }}人）</span>
-        </h1>
+        <div class="head-title">
+          <h1>
+            {{ selectedName }}
+            <span v-if="entityId != null" class="head-count">（{{ total }}人）</span>
+          </h1>
+          <el-dropdown
+            v-if="hasOrgEditPermission && selectedNode"
+            trigger="click"
+            @command="handleOrgCommand"
+          >
+            <span class="org-more" title="组织操作">
+              <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="child">添加子部门</el-dropdown-item>
+                <el-dropdown-item command="edit">修改</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
         <el-button
           v-if="hasEditPermission"
           type="primary"
@@ -799,12 +874,20 @@ watch(
       </div>
 
       <el-form :inline="true" class="filter-form" @submit.prevent="handleSearch">
-        <el-form-item label="关键字">
+        <el-form-item label="姓名">
           <el-input
-            v-model="keywordInput"
+            v-model="nameInput"
             clearable
-            placeholder="输入姓名、手机号或编号"
-            style="width: 220px"
+            placeholder="请输入姓名"
+            style="width: 160px"
+          />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input
+            v-model="mobileInput"
+            clearable
+            placeholder="请输入手机号"
+            style="width: 180px"
           />
         </el-form-item>
         <el-form-item label="职务">
@@ -821,7 +904,7 @@ watch(
         </el-form-item>
         <el-form-item>
           <el-button type="primary" native-type="submit" :loading="loading">
-            搜索
+            查询
           </el-button>
           <el-button native-type="button" :disabled="loading" @click="handleReset">重置</el-button>
         </el-form-item>
@@ -858,15 +941,15 @@ watch(
             </el-table-column>
             <el-table-column label="在职状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="rowOf(row).state !== false ? 'success' : 'info'" size="small" effect="light">
+                <span :class="['state-text', rowOf(row).state !== false ? 'is-active' : 'is-inactive']">
                   {{ rowOf(row).state !== false ? '在职' : '离职' }}
-                </el-tag>
+                </span>
               </template>
             </el-table-column>
-            <el-table-column v-if="hasEditPermission" label="操作" width="90" fixed="right">
+            <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" size="small" @click="openEdit(rowOf(row))">
-                  编辑
+                <el-button type="primary" size="small" @click="openDetail(rowOf(row))">
+                  查看
                 </el-button>
               </template>
             </el-table-column>
@@ -896,15 +979,15 @@ watch(
     >
       <div v-loading="formLoading">
         <AppError v-if="formError" :description="formError" />
-        <el-form label-width="108px" @submit.prevent>
+        <el-form label-width="108px" :disabled="!hasEditPermission" @submit.prevent>
           <div class="form-section">基础档案</div>
           <div class="form-grid">
-            <el-form-item label="员工编号" required>
+            <el-form-item label="员工编号">
               <el-input
                 v-model="form.id"
+                disabled
                 maxlength="50"
-                :disabled="formMode === 'edit'"
-                placeholder="员工编号"
+                :placeholder="formMode === 'create' ? '系统自动生成' : ''"
               />
             </el-form-item>
             <el-form-item label="员工姓名" required>
@@ -914,22 +997,12 @@ watch(
               <el-input v-model="form.alias" maxlength="50" placeholder="请输入员工花名" />
             </el-form-item>
             <el-form-item label="手机号" required>
-              <div class="phone-line">
-                <el-input
-                  v-model="form.phoneNumber"
-                  maxlength="20"
-                  placeholder="请输入手机号"
-                  :readonly="formMode === 'edit' && !phoneRevealed"
-                />
-                <el-button
-                  v-if="formMode === 'edit' && hasMobilePermission && !phoneRevealed"
-                  link
-                  type="primary"
-                  @click="revealEditMobile"
-                >
-                  查看完整号码
-                </el-button>
-              </div>
+              <el-input
+                v-model="form.phoneNumber"
+                maxlength="20"
+                placeholder="请输入手机号"
+                :readonly="formMode === 'edit' && !hasMobilePermission"
+              />
             </el-form-item>
             <el-form-item label="性别" required>
               <el-radio-group v-model="form.gender">
@@ -962,7 +1035,7 @@ watch(
                 <el-option v-for="job in jobTypes" :key="job.id" :label="job.name" :value="job.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="入职日期">
+            <el-form-item label="入职日期" required>
               <el-date-picker
                 v-model="form.entryDate"
                 type="date"
@@ -1026,7 +1099,9 @@ watch(
                 >
                   {{ item.entityName }}<template v-if="item.primary">[主]</template>
                 </el-tag>
-                <el-button link type="primary" @click="openOrgPick">修改</el-button>
+                <el-button link type="primary" @click="openOrgPick">
+                  修改
+                </el-button>
               </div>
               <p class="field-hint">点击标签把该单位设为主组织</p>
             </el-form-item>
@@ -1272,6 +1347,29 @@ watch(
   margin-bottom: 12px;
 }
 
+.head-title {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.org-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #909399;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.org-more:hover {
+  color: #ff7a00;
+  background: #fff3e8;
+}
+
 .list-head h1 {
   margin: 0;
   font-size: 18px;
@@ -1331,7 +1429,6 @@ watch(
   grid-column: span 3;
 }
 
-.phone-line,
 .date-range,
 .entity-tags {
   display: flex;
@@ -1410,5 +1507,42 @@ watch(
     border-right: 0;
     border-bottom: 1px solid #ebeef5;
   }
+}
+
+.tree-count {
+  font-size: 12px;
+  color: #909399;
+  white-space: nowrap;
+}
+
+.state-text {
+  font-size: 12px;
+}
+
+.state-text.is-active {
+  color: #52c41a;
+}
+
+.state-text.is-inactive {
+  color: #909399;
+}
+
+.directory-page :deep(.el-button--primary:not(.is-link):not(.is-text)) {
+  --el-button-bg-color: #ff7a00;
+  --el-button-border-color: #ff7a00;
+  --el-button-hover-bg-color: #ff9333;
+  --el-button-hover-border-color: #ff9333;
+  --el-button-active-bg-color: #e56b00;
+  --el-button-active-border-color: #e56b00;
+}
+
+.directory-page :deep(.el-pagination.is-background .el-pager li.is-active) {
+  background-color: #ff7a00;
+}
+
+.directory-page :deep(.el-table th.el-table__cell) {
+  background: #f5f7fa;
+  color: #303133;
+  font-weight: 600;
 }
 </style>

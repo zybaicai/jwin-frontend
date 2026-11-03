@@ -3,10 +3,13 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import AppEmpty from '@/components/common/AppEmpty.vue'
 import AppError from '@/components/common/AppError.vue'
+import OrgScopeTree from '@/components/goods/OrgScopeTree.vue'
 import {
   fetchProjectConsumeEntities,
+  fetchProjectModifyPriceStores,
   fetchProjectSaleEntities,
   replaceProjectConsumeEntities,
+  replaceProjectModifyPriceStores,
   replaceProjectSaleEntities,
 } from '@/api/goods-scope'
 import {
@@ -28,7 +31,11 @@ import {
   fetchConsumableTemplateList,
 } from '@/api/consumable'
 import { fetchSaleChannelOptions } from '@/api/sale-channel'
-import { fetchOrganizationTree, flattenStoreOptions } from '@/api/organization'
+import {
+  fetchOrganizationTree,
+  flattenStoreOptions,
+  type OrganizationTreeNode,
+} from '@/api/organization'
 import {
   PROJECT_SORT_FIELDS,
   ProjectPermission,
@@ -98,6 +105,9 @@ const canEditChannelPrice = computed(
 const hasOrgStoreView = computed(() =>
   permissionStore.hasPermission('org:store:view'),
 )
+const hasPriceChangeConfig = computed(() =>
+  permissionStore.hasPermission(PricePermission.CHANGE_CONFIG),
+)
 const hasConsumableView = computed(() =>
   permissionStore.hasPermission(ConsumablePermission.VIEW),
 )
@@ -140,18 +150,26 @@ const form = reactive({
   allowLargess: false,
   brandId: null as number | null,
   remark: '',
+  permanent: true,
+  saleStartDate: null as string | null,
+  saleEndingDate: null as string | null,
 })
 
 const storeOptions = ref<StoreOption[]>([])
 const storeOptionsError = ref<string | null>(null)
+/** 组织树（含公司/事业部/门店），供改价/销售/消耗范围勾选 */
+const orgTree = ref<OrganizationTreeNode[]>([])
+const orgTreeLoading = ref(false)
+const adjustStoreIds = ref<number[]>([])
 const saleEntityIds = ref<number[]>([])
 const consumeEntityIds = ref<number[]>([])
+const adjustChecked = ref(0)
+const saleChecked = ref(0)
+const consumeChecked = ref(0)
 const scopeLoading = ref(false)
 const scopeSaving = ref(false)
 const scopeError = ref<string | null>(null)
-/** 空=全部可用；有值=指定适用门店 */
-const saleScopeMode = ref<'all' | 'specified'>('all')
-const consumeScopeMode = ref<'all' | 'specified'>('all')
+const adjustScopeError = ref<string | null>(null)
 
 const channelPrices = ref<ProjectChannelPriceItem[]>([])
 const draftChannelPrices = ref<ChannelPriceDraft[]>([])
@@ -231,14 +249,26 @@ async function loadCategoryTrees(): Promise<void> {
 
 async function loadStoreOptions(): Promise<void> {
   storeOptionsError.value = null
+  orgTreeLoading.value = true
   try {
     if (hasOrgStoreView.value) {
       const tree = await fetchOrganizationTree(true)
+      orgTree.value = tree
       storeOptions.value = flattenStoreOptions(tree)
     } else {
       storeOptions.value = storeStore.availableStores.map((s) => ({
         id: s.id,
         name: s.name,
+      }))
+      orgTree.value = storeOptions.value.map((s) => ({
+        id: s.id,
+        entityName: s.name,
+        parentId: null,
+        store: true,
+        warehouse: false,
+        active: true,
+        sequence: null,
+        children: [],
       }))
       if (storeOptions.value.length === 0) {
         storeOptionsError.value =
@@ -250,7 +280,19 @@ async function loadStoreOptions(): Promise<void> {
       id: s.id,
       name: s.name,
     }))
+    orgTree.value = storeOptions.value.map((s) => ({
+      id: s.id,
+      entityName: s.name,
+      parentId: null,
+      store: true,
+      warehouse: false,
+      active: true,
+      sequence: null,
+      children: [],
+    }))
     storeOptionsError.value = getUserFriendlyErrorMessage(error)
+  } finally {
+    orgTreeLoading.value = false
   }
 }
 
@@ -347,11 +389,14 @@ async function handleSortChange(payload: {
 }
 
 function resetScopeState(): void {
+  adjustStoreIds.value = []
   saleEntityIds.value = []
   consumeEntityIds.value = []
-  saleScopeMode.value = 'all'
-  consumeScopeMode.value = 'all'
+  adjustChecked.value = 0
+  saleChecked.value = 0
+  consumeChecked.value = 0
   scopeError.value = null
+  adjustScopeError.value = null
 }
 
 function resetChannelPriceState(): void {
@@ -640,17 +685,19 @@ async function handleChannelDeactivate(
 async function loadScopes(projectId: number): Promise<void> {
   scopeLoading.value = true
   scopeError.value = null
+  adjustScopeError.value = null
   try {
     const [sale, consume] = await Promise.all([
       fetchProjectSaleEntities(projectId),
       fetchProjectConsumeEntities(projectId),
     ])
-    const saleIds = sale.entityIds ?? []
-    const consumeIds = consume.entityIds ?? []
-    saleEntityIds.value = [...saleIds]
-    consumeEntityIds.value = [...consumeIds]
-    saleScopeMode.value = saleIds.length === 0 ? 'all' : 'specified'
-    consumeScopeMode.value = consumeIds.length === 0 ? 'all' : 'specified'
+    saleEntityIds.value = [...(sale.entityIds ?? [])]
+    consumeEntityIds.value = [...(consume.entityIds ?? [])]
+    if (hasPriceChangeConfig.value) {
+      adjustStoreIds.value = [...(await fetchProjectModifyPriceStores(projectId))]
+    } else {
+      adjustStoreIds.value = []
+    }
   } catch (error) {
     scopeError.value = getUserFriendlyErrorMessage(error)
     notifyError(error)
@@ -673,6 +720,9 @@ function openCreate(): void {
   form.allowLargess = false
   form.brandId = null
   form.remark = ''
+  form.permanent = true
+  form.saleStartDate = null
+  form.saleEndingDate = null
   formError.value = null
   resetScopeState()
   resetChannelPriceState()
@@ -698,6 +748,9 @@ async function openEdit(row: ProjectItem): Promise<void> {
   form.allowLargess = row.allowLargess === true
   form.brandId = row.brandId
   form.remark = row.remark ?? ''
+  form.permanent = row.saleStartDate == null && row.saleEndingDate == null
+  form.saleStartDate = row.saleStartDate ?? null
+  form.saleEndingDate = row.saleEndingDate ?? null
   formError.value = null
   resetScopeState()
   resetChannelPriceState()
@@ -723,6 +776,9 @@ async function openEdit(row: ProjectItem): Promise<void> {
     form.allowLargess = detail.allowLargess === true
     form.brandId = detail.brandId
     form.remark = detail.remark ?? ''
+    form.permanent = detail.saleStartDate == null && detail.saleEndingDate == null
+    form.saleStartDate = detail.saleStartDate ?? null
+    form.saleEndingDate = detail.saleEndingDate ?? null
     await Promise.all([
       loadScopes(row.id),
       loadChannelPrices(row.id),
@@ -753,6 +809,11 @@ function validateForm(): string | null {
   if (form.treatTime != null && (!Number.isInteger(form.treatTime) || form.treatTime < 0)) {
     return '服务时长须为非负整数（分钟）'
   }
+  if (!form.permanent) {
+    if (!form.saleStartDate) return '非永久时须填写上线时间'
+    if (!form.saleEndingDate) return '非永久时须填写下线时间'
+    if (form.saleStartDate > form.saleEndingDate) return '上线时间不能晚于下线时间'
+  }
   return null
 }
 
@@ -760,12 +821,14 @@ async function saveScopes(projectId: number): Promise<void> {
   if (!hasEditPermission.value) {
     return
   }
-  const saleIds = saleScopeMode.value === 'all' ? [] : [...saleEntityIds.value]
-  const consumeIds = consumeScopeMode.value === 'all' ? [] : [...consumeEntityIds.value]
-  await Promise.all([
-    replaceProjectSaleEntities(projectId, { entityIds: saleIds }),
-    replaceProjectConsumeEntities(projectId, { entityIds: consumeIds }),
-  ])
+  const tasks: Array<Promise<unknown>> = [
+    replaceProjectSaleEntities(projectId, { entityIds: [...saleEntityIds.value] }),
+    replaceProjectConsumeEntities(projectId, { entityIds: [...consumeEntityIds.value] }),
+  ]
+  if (hasPriceChangeConfig.value) {
+    tasks.push(replaceProjectModifyPriceStores(projectId, [...adjustStoreIds.value]))
+  }
+  await Promise.all(tasks)
 }
 
 async function submitDraftChannelPrices(projectId: number): Promise<void> {
@@ -814,6 +877,8 @@ async function handleSubmit(): Promise<void> {
           allowLargess: form.allowLargess,
           brandId: form.brandId,
           remark: form.remark.trim() || null,
+          saleStartDate: form.permanent ? null : form.saleStartDate,
+          saleEndingDate: form.permanent ? null : form.saleEndingDate,
         })
         await runExclusive(scopeSaving, async () => {
           await saveScopes(created.id)
@@ -834,6 +899,8 @@ async function handleSubmit(): Promise<void> {
           allowLargess: form.allowLargess,
           brandId: form.brandId,
           remark: form.remark.trim() || null,
+          saleStartDate: form.permanent ? null : form.saleStartDate,
+          saleEndingDate: form.permanent ? null : form.saleEndingDate,
         })
         await runExclusive(scopeSaving, async () => {
           await saveScopes(editingId.value!)
@@ -1111,7 +1178,7 @@ watch(
     <el-dialog
       v-model="formVisible"
       :title="formMode === 'create' ? '新增项目' : '编辑项目'"
-      width="820px"
+      width="980px"
       destroy-on-close
       :close-on-click-modal="false"
       class="project-form-dialog"
@@ -1194,6 +1261,38 @@ watch(
                     <el-switch v-model="form.allowLargess" />
                   </el-form-item>
                 </el-col>
+                <el-col :span="12">
+                  <el-form-item label="时限">
+                    <el-switch
+                      v-model="form.permanent"
+                      active-text="永久"
+                      inactive-text="指定"
+                      inline-prompt
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12" v-if="!form.permanent">
+                  <el-form-item label="上线时间">
+                    <el-date-picker
+                      v-model="form.saleStartDate"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      placeholder="选择上线日期"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12" v-if="!form.permanent">
+                  <el-form-item label="下线时间">
+                    <el-date-picker
+                      v-model="form.saleEndingDate"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      placeholder="选择下线日期"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
                 <el-col :span="24">
                   <el-form-item label="备注">
                     <el-input
@@ -1210,97 +1309,62 @@ watch(
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane label="改价范围" name="adjust">
+          <el-tab-pane name="adjust">
+            <template #label>
+              <span class="tab-label">
+                改价范围
+                <span v-if="adjustChecked > 0" class="tab-count">{{ adjustChecked }}</span>
+              </span>
+            </template>
+            <AppError v-if="adjustScopeError" :description="adjustScopeError" />
             <el-alert
-              type="info"
+              v-if="!hasPriceChangeConfig"
+              type="warning"
               :closable="false"
               show-icon
-              title="改价权限按岗位在价格权限配置，本项目开单改价受渠道报价 allowAdjust 约束"
+              title="需具备 price:change:config 权限才能配置项目改价范围"
             />
-            <p class="scope-hint tab-hint">
-              当前无项目级改价范围接口；开单临时改价是否允许，以报价结果中的
-              <code>allowAdjust</code> 及岗位价格权限为准，请在「价格权限 / 岗位权限」中配置。
-            </p>
+            <OrgScopeTree
+              v-else
+              v-model="adjustStoreIds"
+              v-model:checked-count="adjustChecked"
+              :data="orgTree"
+              :loading="orgTreeLoading"
+            />
           </el-tab-pane>
 
-          <el-tab-pane label="销售范围" name="saleScope">
-            <p class="scope-hint">
-              项目级销售范围仅作历史数据与未带渠道的通用目录展示参考，
-              <strong>不能</strong>让未配置有效渠道价的项目继续按该渠道开单。
-            </p>
+          <el-tab-pane name="saleScope">
+            <template #label>
+              <span class="tab-label">
+                销售范围
+                <span v-if="saleChecked > 0" class="tab-count">{{ saleChecked }}</span>
+              </span>
+            </template>
             <AppError v-if="scopeError" :description="scopeError" />
             <AppError v-if="storeOptionsError" :description="storeOptionsError" />
-            <el-form label-width="100px" @submit.prevent>
-              <el-form-item label="销售范围">
-                <div class="scope-block">
-                  <el-radio-group
-                    v-model="saleScopeMode"
-                    :disabled="!hasEditPermission"
-                  >
-                    <el-radio value="all">全部可用</el-radio>
-                    <el-radio value="specified">指定适用门店</el-radio>
-                  </el-radio-group>
-                  <el-select
-                    v-if="saleScopeMode === 'specified'"
-                    v-model="saleEntityIds"
-                    multiple
-                    filterable
-                    collapse-tags
-                    collapse-tags-tooltip
-                    placeholder="选择适用门店"
-                    style="width: 100%; margin-top: 8px"
-                    :disabled="!hasEditPermission"
-                  >
-                    <el-option
-                      v-for="s in storeOptions"
-                      :key="s.id"
-                      :label="s.name"
-                      :value="s.id"
-                    />
-                  </el-select>
-                </div>
-              </el-form-item>
-            </el-form>
+            <OrgScopeTree
+              v-model="saleEntityIds"
+              v-model:checked-count="saleChecked"
+              :data="orgTree"
+              :loading="orgTreeLoading"
+            />
           </el-tab-pane>
 
-          <el-tab-pane label="消耗范围" name="consumeScope">
-            <p class="scope-hint">
-              项目级消耗范围用于账户无法解析原销售渠道时的耗卡兼容；
-              已售资产耗卡不因渠道价后来停用而阻断。
-            </p>
+          <el-tab-pane name="consumeScope">
+            <template #label>
+              <span class="tab-label">
+                消耗范围
+                <span v-if="consumeChecked > 0" class="tab-count">{{ consumeChecked }}</span>
+              </span>
+            </template>
             <AppError v-if="scopeError" :description="scopeError" />
             <AppError v-if="storeOptionsError" :description="storeOptionsError" />
-            <el-form label-width="100px" @submit.prevent>
-              <el-form-item label="消耗范围">
-                <div class="scope-block">
-                  <el-radio-group
-                    v-model="consumeScopeMode"
-                    :disabled="!hasEditPermission"
-                  >
-                    <el-radio value="all">全部可用</el-radio>
-                    <el-radio value="specified">指定适用门店</el-radio>
-                  </el-radio-group>
-                  <el-select
-                    v-if="consumeScopeMode === 'specified'"
-                    v-model="consumeEntityIds"
-                    multiple
-                    filterable
-                    collapse-tags
-                    collapse-tags-tooltip
-                    placeholder="选择适用门店"
-                    style="width: 100%; margin-top: 8px"
-                    :disabled="!hasEditPermission"
-                  >
-                    <el-option
-                      v-for="s in storeOptions"
-                      :key="s.id"
-                      :label="s.name"
-                      :value="s.id"
-                    />
-                  </el-select>
-                </div>
-              </el-form-item>
-            </el-form>
+            <OrgScopeTree
+              v-model="consumeEntityIds"
+              v-model:checked-count="consumeChecked"
+              :data="orgTree"
+              :loading="orgTreeLoading"
+            />
           </el-tab-pane>
 
           <el-tab-pane label="耗材" name="consumable">
@@ -1697,6 +1761,24 @@ watch(
   width: 100%;
 }
 
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #fff3e6;
+  color: #ff7a00;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
 .channel-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1711,5 +1793,13 @@ watch(
 
 .project-form-tabs :deep(.el-tabs__content) {
   padding-top: 8px;
+}
+
+.project-form-tabs :deep(.el-tabs__item.is-active) {
+  color: #ff7a00;
+}
+
+.project-form-tabs :deep(.el-tabs__active-bar) {
+  background-color: #ff7a00;
 }
 </style>

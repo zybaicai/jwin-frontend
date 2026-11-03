@@ -10,6 +10,7 @@ import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import { ApiBusinessError, ApiHttpError } from '@/utils/api-error'
 import { onAuthExpiredOnce } from '@/utils/auth-event'
+import { DEV_MOCK_AUTH } from '@/mock/dev-auth'
 import { uiMessage } from '@/utils/ui'
 import './style.css'
 
@@ -21,6 +22,10 @@ async function bootstrap() {
 
   const authStore = useAuthStore()
   onAuthExpiredOnce(() => {
+    // 本地调试旁路下接口必然未授权，不再清账号、不跳登录页。
+    if (DEV_MOCK_AUTH) {
+      return
+    }
     authStore.clearAuth()
     if (router.currentRoute.value.name !== 'login') {
       void router.replace({ name: 'login' })

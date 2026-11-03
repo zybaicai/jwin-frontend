@@ -13,6 +13,7 @@ import type { EmployeeInfo } from '@/types/user'
 import { ApiCode } from '@/types/response'
 import { ApiBusinessError } from '@/utils/api-error'
 import { getToken, removeToken, setToken } from '@/utils/token'
+import { DEV_MOCK_AUTH, DEV_MOCK_TOKEN, createMockCurrentUser } from '@/mock/dev-auth'
 
 export type AuthInitStatus = 'idle' | 'initializing' | 'success' | 'failed'
 
@@ -137,6 +138,13 @@ export const useAuthStore = defineStore('auth', () => {
     initStatus.value = 'initializing'
     loading.value = true
     try {
+      // 本地调试旁路：不请求 /me，直接注入全权限账号。
+      if (DEV_MOCK_AUTH) {
+        token.value = DEV_MOCK_TOKEN
+        currentUser.value = createMockCurrentUser()
+        initStatus.value = 'success'
+        return
+      }
       token.value = getToken()
       if (token.value == null) {
         currentUser.value = null

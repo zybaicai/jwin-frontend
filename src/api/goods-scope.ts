@@ -42,6 +42,26 @@ export async function replaceProjectConsumeEntities(
   return response.data.data
 }
 
+/** GET /v1/projects/{id}/modify-price-stores —— 项目可改价门店白名单 */
+export async function fetchProjectModifyPriceStores(projectId: number): Promise<number[]> {
+  const response = await request.get<ApiResponse<number[]>>(
+    `/v1/projects/${projectId}/modify-price-stores`,
+  )
+  return response.data.data ?? []
+}
+
+/** PUT /v1/projects/{id}/modify-price-stores —— 全量替换；空列表=不限制 */
+export async function replaceProjectModifyPriceStores(
+  projectId: number,
+  storeIds: number[],
+): Promise<number[]> {
+  const response = await request.put<ApiResponse<number[]>>(
+    `/v1/projects/${projectId}/modify-price-stores`,
+    { storeIds },
+  )
+  return response.data.data ?? []
+}
+
 type CardScopeKind = 'general' | 'time' | 'saving' | 'package'
 
 function cardScopeBase(kind: CardScopeKind, id: number): string {

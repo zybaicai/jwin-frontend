@@ -61,6 +61,8 @@ export interface EmployeeRecord {
 export interface EmployeePageQuery {
   entityId: number
   keyword?: string
+  name?: string
+  mobile?: string
   jobId?: number
   state?: boolean
   page?: number
@@ -68,7 +70,6 @@ export interface EmployeePageQuery {
 }
 
 export interface CreateEmployeeBody {
-  id: string
   name: string
   alias?: string
   phoneNumber: string

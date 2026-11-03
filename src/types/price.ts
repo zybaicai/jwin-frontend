@@ -55,6 +55,7 @@ export interface PriceChangeCheckResult {
 export const PricePermission = {
   QUOTE: 'price:quote',
   CHANGE: 'price:change',
+  CHANGE_CONFIG: 'price:change:config',
   CHANNEL_EDIT: 'price:channel:edit',
 } as const
 

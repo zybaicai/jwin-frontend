@@ -445,6 +445,9 @@ export interface CustomerSourceOption {
 /** 来源管理页复用同一 VO */
 export type CustomerSource = CustomerSourceOption
 
+/** 来源在同级中的移动方向 */
+export type CustomerSourceMoveDirection = 'TOP' | 'UP' | 'DOWN' | 'BOTTOM'
+
 export interface ServicerEmployeeOption {
   id: string
   servicerId: number | null

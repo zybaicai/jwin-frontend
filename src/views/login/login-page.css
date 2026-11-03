@@ -1,0 +1,344 @@
+/* 登录页原型样式（与 yudao-erp-login_home 保持一致） */
+.login-page-root {
+  --ink: #2b211c;
+  --ink-soft: #5c4f47;
+  --mist: #fdf6f2;
+  --brand: #ff8646;
+  --brand-deep: #c85a1f;
+  --brand-mid: #f57a35;
+  --brand-soft: #ffb287;
+  --line: rgba(43, 33, 28, 0.1);
+  font-family:
+    'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans SC', -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  color: var(--ink);
+  background: #fbf3ee;
+  -webkit-font-smoothing: antialiased;
+}
+
+.login-page-root .bio-stage {
+  background:
+    radial-gradient(1100px 680px at 8% -6%, rgba(255, 154, 96, 0.34), transparent 62%),
+    radial-gradient(760px 560px at 74% 14%, rgba(255, 205, 176, 0.5), transparent 66%),
+    radial-gradient(900px 700px at 20% 96%, rgba(255, 168, 116, 0.26), transparent 64%),
+    radial-gradient(620px 480px at 96% 88%, rgba(255, 224, 206, 0.62), transparent 70%),
+    linear-gradient(155deg, #fffaf7 0%, #fdf1e9 46%, #fbe6da 100%);
+}
+
+.login-page-root .micro-grid {
+  background-image:
+    linear-gradient(rgba(200, 90, 31, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 90, 31, 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(120% 95% at 22% 34%, #000 8%, transparent 78%);
+  -webkit-mask-image: radial-gradient(120% 95% at 22% 34%, #000 8%, transparent 78%);
+}
+
+.login-page-root .hair-lines {
+  background-image:
+    repeating-linear-gradient(96deg, rgba(200, 90, 31, 0.075) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(84deg, rgba(255, 134, 70, 0.065) 0 1px, transparent 1px 22px);
+  mask-image: radial-gradient(78% 84% at 46% 62%, #000 0%, transparent 76%);
+  -webkit-mask-image: radial-gradient(78% 84% at 46% 62%, #000 0%, transparent 76%);
+}
+
+.login-page-root .dot-field {
+  background-image: radial-gradient(rgba(200, 90, 31, 0.18) 1.1px, transparent 1.1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(60% 60% at 78% 78%, #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(60% 60% at 78% 78%, #000 0%, transparent 72%);
+}
+
+.login-page-root .glass-panel {
+  background: linear-gradient(
+    158deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.78) 58%,
+    rgba(255, 246, 240, 0.84) 100%
+  );
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  box-shadow:
+    0 40px 90px -34px rgba(160, 78, 32, 0.28),
+    0 2px 0 rgba(255, 255, 255, 0.9) inset,
+    0 0 0 1px rgba(255, 134, 70, 0.07);
+}
+
+.login-page-root .soft-card {
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.login-page-root .field-wrap {
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background-color 0.22s ease;
+}
+
+.login-page-root .field-wrap:focus-within {
+  border-color: rgba(255, 134, 70, 0.65);
+  box-shadow: 0 0 0 4px rgba(255, 134, 70, 0.15);
+  background: #fff;
+}
+
+.login-page-root .field-wrap.is-error {
+  border-color: #c9604f;
+  box-shadow: 0 0 0 4px rgba(201, 96, 79, 0.12);
+}
+
+.login-page-root .tabs-rail {
+  background: rgba(250, 232, 220, 0.9);
+}
+
+.login-page-root .tab-btn {
+  transition: color 0.2s ease;
+}
+
+.login-page-root .tab-indicator {
+  transition: transform 0.34s cubic-bezier(0.4, 0.05, 0.2, 1);
+  background: #fff;
+  box-shadow:
+    0 4px 14px -6px rgba(180, 88, 34, 0.36),
+    0 0 0 1px rgba(255, 134, 70, 0.1);
+}
+
+.login-page-root .btn-primary {
+  background: linear-gradient(103deg, #f4783a 0%, #ff8646 52%, #ffa066 100%);
+  box-shadow:
+    0 16px 34px -16px rgba(200, 90, 31, 0.68),
+    0 1px 0 rgba(255, 255, 255, 0.28) inset;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.24s ease,
+    filter 0.2s ease;
+}
+
+.login-page-root .btn-primary:hover {
+  filter: brightness(1.04);
+  box-shadow:
+    0 20px 40px -16px rgba(200, 90, 31, 0.74),
+    0 1px 0 rgba(255, 255, 255, 0.32) inset;
+}
+
+.login-page-root .btn-primary:active {
+  transform: translateY(1px);
+}
+
+.login-page-root .btn-primary:disabled {
+  filter: grayscale(0.35) brightness(0.96);
+  opacity: 0.72;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.login-page-root .checkbox-mark {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.login-page-root .pulse-dot {
+  animation: loginPulseSoft 2.6s ease-in-out infinite;
+}
+
+@keyframes loginPulseSoft {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+.login-page-root .rise {
+  animation: loginRise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.login-page-root .rise-2 {
+  animation-delay: 0.1s;
+}
+
+.login-page-root .rise-3 {
+  animation-delay: 0.2s;
+}
+
+@keyframes loginRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-page-root .story-scroll {
+  scrollbar-width: thin;
+}
+
+.login-page-root .story-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.login-page-root .story-scroll::-webkit-scrollbar-thumb {
+  background: rgba(200, 90, 31, 0.2);
+  border-radius: 99px;
+}
+
+.login-page-root .story-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.login-page-root .modal-shell {
+  background: rgba(48, 30, 20, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.login-page-root .modal-card {
+  animation: loginModalIn 0.3s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+@keyframes loginModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-page-root .toast {
+  animation: loginToastIn 0.32s ease both;
+}
+
+@keyframes loginToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-page-root .ring-orbit {
+  animation: loginOrbit 26s linear infinite;
+  transform-origin: center;
+}
+
+.login-page-root .ring-orbit-rev {
+  animation: loginOrbit 38s linear infinite reverse;
+  transform-origin: center;
+}
+
+@keyframes loginOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page-root .rise,
+  .login-page-root .rise-2,
+  .login-page-root .rise-3,
+  .login-page-root .pulse-dot,
+  .login-page-root .ring-orbit,
+  .login-page-root .ring-orbit-rev,
+  .login-page-root .modal-card,
+  .login-page-root .toast,
+  .login-page-root .particle,
+  .login-page-root .particle-glow {
+    animation: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  .login-page-root .brand-stage {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .login-page-root .login-rail {
+    background: rgba(255, 255, 255, 0.72);
+  }
+  .login-page-root .glass-panel {
+    box-shadow: 0 26px 60px -30px rgba(160, 78, 32, 0.26);
+  }
+}
+
+.login-page-root .particle {
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0;
+  animation: loginFloatUp linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes loginFloatUp {
+  0% {
+    transform: translate3d(0, 20px, 0) scale(0.7);
+  }
+  18% {
+    opacity: 0.75;
+  }
+  70% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(16px, -150px, 0) scale(1.15);
+  }
+}
+
+.login-page-root .particle-glow {
+  animation: loginGlowDrift 16s ease-in-out infinite;
+}
+
+@keyframes loginGlowDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) scale(1.06);
+  }
+}
+
+.login-page-root .brand-logo {
+  height: 34px;
+  width: auto;
+  max-width: 210px;
+  object-fit: contain;
+}
+
+.login-page-root .brand-rule {
+  background: linear-gradient(90deg, rgba(255, 134, 70, 0.65), rgba(255, 134, 70, 0.06));
+}
+
+.login-page-root .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

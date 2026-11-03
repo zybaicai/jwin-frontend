@@ -33,6 +33,7 @@ import type {
   CustomerSaleOrder,
   CustomerSaleQuery,
   CustomerSourceOption,
+  CustomerSourceMoveDirection,
   CustomerTagItem,
   OverrideCustomerMemberLevelBody,
   PageData,
@@ -270,6 +271,20 @@ export async function updateCustomerSource(
     body,
   )
   return response.data.data
+}
+
+/**
+ * PUT /v1/customer-sources/{id}/move —— 同级排序（置顶/上移/下移/置底）
+ * 权限：customer:source:edit
+ */
+export async function moveCustomerSource(
+  id: number,
+  direction: CustomerSourceMoveDirection,
+): Promise<void> {
+  await request.put<ApiResponse<null>>(
+    `/v1/customer-sources/${encodeURIComponent(String(id))}/move`,
+    { direction },
+  )
 }
 
 /**

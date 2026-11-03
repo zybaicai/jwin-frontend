@@ -57,7 +57,7 @@ const form = reactive({
   introducerCustomerId: undefined as number | undefined,
 })
 
-const ALWAYS_REQUIRED = new Set(['name', 'mobile'])
+const ALWAYS_REQUIRED = new Set(['name', 'mobile', 'nurseEmployeeId'])
 
 function fieldRequired(code: string): boolean {
   if (ALWAYS_REQUIRED.has(code)) return true
@@ -286,9 +286,8 @@ watch(visible, (open) => {
       <el-form-item label="主护理师" :required="fieldRequired('nurseEmployeeId')">
         <el-select
           v-model="form.nurseEmployeeId"
-          clearable
           filterable
-          placeholder="可选"
+          placeholder="请选择"
           style="width: 100%"
         >
           <el-option

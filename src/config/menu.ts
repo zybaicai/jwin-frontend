@@ -46,6 +46,18 @@ const IconHome = menuIcon('IconHome', () => [
   h('path', { d: 'M6 10 V20 H18 V10' }),
 ])
 
+const IconSettings = menuIcon('IconSettings', () => [
+  h('circle', { cx: '12', cy: '12', r: '3' }),
+  h('path', { d: 'M12 3 V5' }),
+  h('path', { d: 'M12 19 V21' }),
+  h('path', { d: 'M3 12 H5' }),
+  h('path', { d: 'M19 12 H21' }),
+  h('path', { d: 'M5.6 5.6 L7 7' }),
+  h('path', { d: 'M17 17 L18.4 18.4' }),
+  h('path', { d: 'M18.4 5.6 L17 7' }),
+  h('path', { d: 'M7 17 L5.6 18.4' }),
+])
+
 const IconCustomers = menuIcon('IconCustomers', () => [
   h('circle', { cx: '9', cy: '8', r: '3' }),
   h('path', { d: 'M3 19 C3 15.5 5.5 14 9 14 C12.5 14 15 15.5 15 19' }),
@@ -147,6 +159,44 @@ export const menusByCenter: Record<BusinessCenterId, AppMenuItem[]> = {
     name: 'home',
     title: '首页',
     icon: IconHome,
+  },
+  {
+    name: 'group-basic-settings',
+    title: '基础设置',
+    icon: IconSettings,
+    children: [
+      {
+        path: '/settings/pay-methods',
+        name: 'settings-pay-methods',
+        title: '付款方式',
+        permission: 'system:setting:view',
+      },
+      {
+        path: '/settings/product-categories',
+        name: 'settings-product-categories',
+        title: '商品分类',
+        permission: 'system:setting:view',
+      },
+      {
+        path: '/settings/project-brands',
+        name: 'settings-project-brands',
+        title: '项目品牌',
+        permission: 'system:setting:view',
+      },
+    ],
+  },
+  {
+    name: 'group-store-handlers',
+    title: '经手人管理',
+    icon: IconHrHandler,
+    children: [
+      {
+        path: '/handlers',
+        name: 'store-handlers',
+        title: '经手人',
+        permission: 'handler:manage:view',
+      },
+    ],
   },
   {
     name: 'group-store-customers',
